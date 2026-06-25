@@ -43,6 +43,7 @@ function sendJson(res, statusCode, body) {
   const json = JSON.stringify(body);
   res.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
     "content-length": Buffer.byteLength(json)
   });
   res.end(json);
@@ -657,7 +658,10 @@ async function serveStatic(res, pathname) {
     ".ico": "image/x-icon"
   }[ext] || "application/octet-stream";
 
-  res.writeHead(200, { "content-type": contentType });
+  res.writeHead(200, {
+    "content-type": contentType,
+    "cache-control": "no-store"
+  });
   res.end(data);
 }
 

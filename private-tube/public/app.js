@@ -35,6 +35,7 @@ const setupPassword = document.querySelector("#setupPassword");
 const setupMetubeUrl = document.querySelector("#setupMetubeUrl");
 const setupPublicUrl = document.querySelector("#setupPublicUrl");
 const setupStatus = document.querySelector("#setupStatus");
+const setupLoginButton = document.querySelector("#setupLoginButton");
 const initialParams = new URLSearchParams(location.search);
 
 state.query = initialParams.get("q") || "";
@@ -54,6 +55,7 @@ async function api(path, options = {}) {
   try {
     response = await fetch(path, {
       ...options,
+      cache: "no-store",
       headers: { "content-type": "application/json", ...(options.headers || {}) },
       signal: controller.signal
     });
@@ -88,11 +90,26 @@ function hideLogin() {
 function showSetup() {
   loginOverlay.hidden = true;
   setupOverlay.hidden = false;
+  verifySetupStillRequired();
 }
 
 function hideSetup() {
   setupOverlay.hidden = true;
   setupStatus.textContent = "";
+}
+
+async function verifySetupStillRequired() {
+  try {
+    const session = await api("/api/session");
+    state.session = session;
+    if (!session.setupRequired) {
+      hideSetup();
+      showLogin();
+      loginStatus.textContent = "Setup is complete. Sign in with your admin account.";
+    }
+  } catch (error) {
+    setupStatus.textContent = error.message;
+  }
 }
 
 function formatDate(value) {
@@ -510,6 +527,12 @@ setupForm.addEventListener("submit", async (event) => {
   } finally {
     submitButton.disabled = false;
   }
+});
+
+setupLoginButton.addEventListener("click", async () => {
+  state.session = await api("/api/session");
+  hideSetup();
+  showLogin();
 });
 
 logoutButton.addEventListener("click", async () => {
