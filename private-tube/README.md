@@ -86,3 +86,21 @@ Retention cleanup only deletes files when `ALLOW_DELETE=true` and the media fold
 By default, PrivateTube uses the address you opened it with. If Chromecast needs a different LAN URL, set it in the in-app Settings page.
 
 Use WebM or MP4 files for best playback support.
+
+## Thumbnails
+
+Sidecar thumbnails are preferred:
+
+```text
+Video title.webm
+Video title.jpg
+```
+
+When no sidecar image exists, PrivateTube generates thumbnails with FFmpeg into `/data/thumbnails`.
+
+Optional env values:
+
+```yaml
+THUMBNAILS_ENABLED: "true"
+THUMBNAIL_TIME: "00:00:05"
+```

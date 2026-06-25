@@ -315,6 +315,15 @@ function renderSettings() {
           <p>Cast signing secrets and user password hashes are stored in SQLite under /data/private-tube.sqlite.</p>
         </div>
       </article>
+      <article class="settings-row">
+        <div>
+          <strong>Thumbnails</strong>
+          <p>Generated previews are stored under /data/thumbnails. Existing sidecar images are preferred.</p>
+        </div>
+        <div class="row-actions">
+          <button id="regenerateThumbsButton" type="button">Regenerate</button>
+        </div>
+      </article>
     </div>
   `;
 
@@ -325,6 +334,11 @@ function renderSettings() {
     state.config = await api("/api/config");
     renderAddPanel();
     render();
+  });
+
+  document.querySelector("#regenerateThumbsButton").addEventListener("click", async () => {
+    await api("/api/thumbnails/regenerate", { method: "POST", timeoutMs: 120000 });
+    await loadLibrary();
   });
 }
 

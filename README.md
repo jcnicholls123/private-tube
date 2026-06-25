@@ -80,6 +80,28 @@ The watch page includes native Chromecast support. Use WebM or MP4 files for bes
 
 Chromecast devices fetch media directly from PrivateTube. By default, PrivateTube uses the address you opened it with. If your Chromecast needs a different LAN URL, set it in the in-app Settings page.
 
+## Thumbnails
+
+PrivateTube uses sidecar images first, for example:
+
+```text
+Video title.webm
+Video title.jpg
+```
+
+If no sidecar image exists, it generates a thumbnail with FFmpeg and stores it in:
+
+```text
+/data/thumbnails
+```
+
+Optional environment values:
+
+```yaml
+THUMBNAILS_ENABLED: "true"
+THUMBNAIL_TIME: "00:00:05"
+```
+
 ## Development
 
 The app source lives in `private-tube/`.

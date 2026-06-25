@@ -1,10 +1,13 @@
 import crypto from "node:crypto";
+import { execFile } from "node:child_process";
 import { createReadStream, promises as fs } from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const execFileAsync = promisify(execFile);
 const PORT = Number(process.env.PORT || 3020);
 const MEDIA_DIR = path.resolve(process.env.MEDIA_DIR || path.join(__dirname, "media"));
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, "data"));
@@ -17,6 +20,8 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const AUTH_ENABLED = process.env.AUTH_ENABLED !== "false";
 const RESET_ADMIN_PASSWORD = process.env.RESET_ADMIN_PASSWORD === "true";
 const ALLOW_DELETE = process.env.ALLOW_DELETE === "true";
+const THUMBNAILS_ENABLED = process.env.THUMBNAILS_ENABLED !== "false";
+const THUMBNAIL_TIME = process.env.THUMBNAIL_TIME || "00:00:05";
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi"]);
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
@@ -469,6 +474,48 @@ async function findThumbnail(filePath, relativePath) {
   return null;
 }
 
+function thumbnailDir() {
+  return path.join(DATA_DIR, "thumbnails");
+}
+
+function generatedThumbnailPath(videoId) {
+  return path.join(thumbnailDir(), `${videoId}.jpg`);
+}
+
+function generatedThumbnailUrl(videoId) {
+  return `/thumbnails/${encodeURIComponent(`${videoId}.jpg`)}`;
+}
+
+async function generateThumbnail(filePath, videoId) {
+  if (!THUMBNAILS_ENABLED) return null;
+  const outputPath = generatedThumbnailPath(videoId);
+  if (await exists(outputPath)) return generatedThumbnailUrl(videoId);
+
+  await fs.mkdir(thumbnailDir(), { recursive: true });
+  try {
+    await execFileAsync("ffmpeg", [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-ss",
+      THUMBNAIL_TIME,
+      "-i",
+      filePath,
+      "-frames:v",
+      "1",
+      "-vf",
+      "scale=640:-1",
+      "-q:v",
+      "3",
+      outputPath
+    ], { timeout: 30000 });
+    return generatedThumbnailUrl(videoId);
+  } catch (error) {
+    console.warn(`Could not generate thumbnail for ${filePath}: ${error.message}`);
+    return null;
+  }
+}
+
 async function walk(dir, files = []) {
   let entries = [];
   try {
@@ -501,7 +548,7 @@ async function scanLibrary() {
     const pathParts = relativePath.split("/");
     const channelName = pathParts.length > 1 ? pathParts[0] : "Uploads";
     const id = Buffer.from(relativePath).toString("base64url");
-    const thumbnail = await findThumbnail(filePath, relativePath);
+    const thumbnail = await findThumbnail(filePath, relativePath) || await generateThumbnail(filePath, id);
 
     const video = {
       id,
@@ -538,6 +585,10 @@ async function scanLibrary() {
     videos,
     channels: [...channelMap.values()].sort((a, b) => a.name.localeCompare(b.name))
   };
+}
+
+async function clearGeneratedThumbnails() {
+  await fs.rm(thumbnailDir(), { recursive: true, force: true });
 }
 
 function qualityPayload(quality) {
@@ -618,6 +669,15 @@ function resolveMediaPath(relativePath) {
   return fullPath;
 }
 
+function resolveThumbnailPath(filename) {
+  const fullPath = path.resolve(thumbnailDir(), filename);
+  const root = path.resolve(thumbnailDir());
+  if (!fullPath.startsWith(root + path.sep) && fullPath !== root) {
+    return null;
+  }
+  return fullPath;
+}
+
 async function streamMedia(req, res, relativePath) {
   const filePath = resolveMediaPath(relativePath);
   if (!filePath) return sendText(res, 400, "Invalid media path");
@@ -659,6 +719,25 @@ async function streamMedia(req, res, relativePath) {
     "content-type": contentType
   });
   createReadStream(filePath, { start, end }).pipe(res);
+}
+
+async function streamThumbnail(res, filename) {
+  const filePath = resolveThumbnailPath(filename);
+  if (!filePath) return sendText(res, 400, "Invalid thumbnail path");
+
+  let data;
+  try {
+    data = await fs.readFile(filePath);
+  } catch {
+    return sendText(res, 404, "Thumbnail not found");
+  }
+
+  res.writeHead(200, {
+    "content-type": mediaContentType(filePath),
+    "cache-control": "public, max-age=86400",
+    "content-length": data.length
+  });
+  res.end(data);
 }
 
 async function serveStatic(res, pathname) {
@@ -890,6 +969,13 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, library);
   }
 
+  if (url.pathname === "/api/thumbnails/regenerate" && req.method === "POST") {
+    if (!requireAdmin(req, res)) return;
+    await clearGeneratedThumbnails();
+    await scanLibrary();
+    return sendJson(res, 200, library);
+  }
+
   if (url.pathname === "/api/add" && req.method === "POST") {
     try {
       const payload = await readBody(req);
@@ -962,6 +1048,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/media/")) {
       if (!getSession(req)) return sendText(res, 401, "Authentication required");
       return await streamMedia(req, res, safeDecode(url.pathname.slice("/media/".length)));
+    }
+
+    if (url.pathname.startsWith("/thumbnails/")) {
+      if (!getSession(req)) return sendText(res, 401, "Authentication required");
+      return await streamThumbnail(res, safeDecode(url.pathname.slice("/thumbnails/".length)));
     }
 
     if (url.pathname.startsWith("/cast-media/")) {
