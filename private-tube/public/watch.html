@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Watch - PrivateTube</title>
     <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#0f0f0f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="PrivateTube">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
@@ -21,7 +27,7 @@
 
     <main class="watch-layout">
       <section class="player-panel">
-        <video id="player" controls autoplay playsinline></video>
+        <video id="player" controls autoplay playsinline x-webkit-airplay="allow"></video>
         <div class="player-actions">
           <button id="castButton" class="secondary-button" type="button" disabled>Cast</button>
           <span id="castStatus"></span>
@@ -35,7 +41,7 @@
       </aside>
     </main>
 
-    <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+    <script src="/pwa.js" type="module"></script>
     <script src="/watch.js" type="module"></script>
   </body>
 </html>

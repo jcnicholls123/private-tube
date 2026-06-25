@@ -87,6 +87,12 @@ By default, PrivateTube uses the address you opened it with. If Chromecast needs
 
 Use WebM or MP4 files for best playback support.
 
+Google Cast from the web works best from Chrome or Edge on desktop/Android. iPhone Safari and iPhone home-screen web apps do not support the Google Cast Web Sender SDK; use AirPlay from the iPhone video controls where available.
+
+## iPhone Home Screen
+
+Open PrivateTube in Safari, tap Share, then Add to Home Screen.
+
 ## Thumbnails
 
 Sidecar thumbnails are preferred:

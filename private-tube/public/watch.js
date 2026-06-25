@@ -11,6 +11,10 @@ const castStatus = document.querySelector("#castStatus");
 let currentVideo = null;
 let castReady = false;
 
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 function thumbnail(video) {
   if (video.thumbnail) return `<img src="${video.thumbnail}" alt="">`;
   return `<div class="thumb-fallback"><span>Play</span></div>`;
@@ -49,7 +53,7 @@ async function api(path) {
 
 function initializeCastApi() {
   if (!window.cast?.framework || !window.chrome?.cast) {
-    setCastStatus("Cast unavailable");
+    setCastStatus(isIOS() ? "Chromecast is not supported in iPhone Safari" : "Cast unavailable");
     return;
   }
 
@@ -66,8 +70,26 @@ function initializeCastApi() {
 
 window.__onGCastApiAvailable = (isAvailable) => {
   if (isAvailable) initializeCastApi();
-  else setCastStatus("Cast unavailable");
+  else setCastStatus(isIOS() ? "Chromecast is not supported in iPhone Safari" : "Cast unavailable");
 };
+
+function loadCastSdk() {
+  if (isIOS()) {
+    setCastStatus("Use AirPlay from the video controls on iPhone");
+    return;
+  }
+
+  setCastStatus("Looking for Cast support...");
+  const script = document.createElement("script");
+  script.src = "https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1";
+  script.async = true;
+  script.onerror = () => setCastStatus("Could not load Cast SDK");
+  document.head.appendChild(script);
+
+  window.setTimeout(() => {
+    if (!castReady) setCastStatus("Use Chrome or Edge with a Chromecast on this network");
+  }, 5000);
+}
 
 async function castCurrentVideo() {
   if (!castReady || !currentVideo) return;
@@ -119,4 +141,5 @@ async function load() {
 }
 
 castButton.addEventListener("click", castCurrentVideo);
+loadCastSdk();
 load();
