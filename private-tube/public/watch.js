@@ -100,7 +100,7 @@ function loadCastSdk() {
   document.head.appendChild(script);
 
   window.setTimeout(() => {
-    if (!castReady) setCastStatus("Use Chrome or Edge with a Chromecast on this network");
+    if (!castReady) setCastStatus("Use Google Chrome with a Chromecast on this network");
   }, 5000);
 }
 
