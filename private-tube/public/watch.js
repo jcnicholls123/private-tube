@@ -6,6 +6,7 @@ const channelLink = document.querySelector("#channelLink");
 const relatedGrid = document.querySelector("#relatedGrid");
 const searchInput = document.querySelector("#searchInput");
 const castButton = document.querySelector("#castButton");
+const airplayButton = document.querySelector("#airplayButton");
 const castStatus = document.querySelector("#castStatus");
 
 let currentVideo = null;
@@ -22,6 +23,18 @@ function thumbnail(video) {
 
 function setCastStatus(message) {
   castStatus.textContent = message;
+}
+
+function setupAirPlay() {
+  if (!airplayButton || typeof player.webkitShowPlaybackTargetPicker !== "function") return;
+  airplayButton.hidden = false;
+  airplayButton.addEventListener("click", () => {
+    player.webkitShowPlaybackTargetPicker();
+  });
+
+  player.addEventListener("webkitplaybacktargetavailabilitychanged", (event) => {
+    airplayButton.disabled = event.availability !== "available";
+  });
 }
 
 function renderRelated(videos, current) {
@@ -75,7 +88,7 @@ window.__onGCastApiAvailable = (isAvailable) => {
 
 function loadCastSdk() {
   if (isIOS()) {
-    setCastStatus("Use AirPlay from the video controls on iPhone");
+    setCastStatus("Chromecast is not available on iPhone Safari. Use AirPlay.");
     return;
   }
 
@@ -141,5 +154,6 @@ async function load() {
 }
 
 castButton.addEventListener("click", castCurrentVideo);
+setupAirPlay();
 loadCastSdk();
 load();
