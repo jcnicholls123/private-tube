@@ -26,6 +26,15 @@ a {
   text-decoration: none;
 }
 
+.text-link {
+  color: var(--muted);
+  text-align: center;
+}
+
+.text-link:hover {
+  color: var(--text);
+}
+
 button,
 input {
   font: inherit;

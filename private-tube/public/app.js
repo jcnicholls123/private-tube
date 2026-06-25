@@ -22,20 +22,7 @@ const urlInput = document.querySelector("#urlInput");
 const qualitySelect = document.querySelector("#qualitySelect");
 const addStatus = document.querySelector("#addStatus");
 const adminPanel = document.querySelector("#adminPanel");
-const loginOverlay = document.querySelector("#loginOverlay");
-const loginForm = document.querySelector("#loginForm");
-const loginUsername = document.querySelector("#loginUsername");
-const loginPassword = document.querySelector("#loginPassword");
-const loginStatus = document.querySelector("#loginStatus");
 const logoutButton = document.querySelector("#logoutButton");
-const setupOverlay = document.querySelector("#setupOverlay");
-const setupForm = document.querySelector("#setupForm");
-const setupUsername = document.querySelector("#setupUsername");
-const setupPassword = document.querySelector("#setupPassword");
-const setupMetubeUrl = document.querySelector("#setupMetubeUrl");
-const setupPublicUrl = document.querySelector("#setupPublicUrl");
-const setupStatus = document.querySelector("#setupStatus");
-const setupLoginButton = document.querySelector("#setupLoginButton");
 const initialParams = new URLSearchParams(location.search);
 
 state.query = initialParams.get("q") || "";
@@ -67,49 +54,13 @@ async function api(path, options = {}) {
   }
 
   if (response.status === 401) {
-    if (!state.session.setupRequired) showLogin();
+    location.href = "/login.html";
     throw new Error("Authentication required");
   }
 
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error || "Request failed");
   return result;
-}
-
-function showLogin() {
-  if (!state.session.authEnabled) return;
-  if (setupOverlay) setupOverlay.hidden = true;
-  if (loginOverlay) loginOverlay.hidden = false;
-}
-
-function hideLogin() {
-  if (loginOverlay) loginOverlay.hidden = true;
-  if (loginStatus) loginStatus.textContent = "";
-}
-
-function showSetup() {
-  if (loginOverlay) loginOverlay.hidden = true;
-  if (setupOverlay) setupOverlay.hidden = false;
-  verifySetupStillRequired();
-}
-
-function hideSetup() {
-  if (setupOverlay) setupOverlay.hidden = true;
-  if (setupStatus) setupStatus.textContent = "";
-}
-
-async function verifySetupStillRequired() {
-  try {
-    const session = await api("/api/session");
-    state.session = session;
-    if (!session.setupRequired) {
-      hideSetup();
-      showLogin();
-      if (loginStatus) loginStatus.textContent = "Setup is complete. Sign in with your admin account.";
-    }
-  } catch (error) {
-    if (setupStatus) setupStatus.textContent = error.message;
-  }
 }
 
 function formatDate(value) {
@@ -433,15 +384,13 @@ async function loadLibrary() {
 async function boot() {
   state.session = await api("/api/session");
   if (state.session.setupRequired) {
-    showSetup();
+    location.href = "/setup.html";
     return;
   }
   if (state.session.authEnabled && !state.session.authenticated) {
-    showLogin();
+    location.href = "/login.html";
     return;
   }
-  hideLogin();
-  hideSetup();
   await loadLibrary();
 }
 
@@ -483,54 +432,6 @@ addForm.addEventListener("submit", async (event) => {
   } catch (error) {
     addStatus.textContent = error.message;
   }
-});
-
-loginForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  loginStatus.textContent = "Signing in...";
-  try {
-    await api("/api/login", {
-      method: "POST",
-      body: JSON.stringify({ username: loginUsername.value, password: loginPassword.value })
-    });
-    await boot();
-  } catch (error) {
-    loginStatus.textContent = error.message;
-  }
-});
-
-setupForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const submitButton = setupForm.querySelector("button");
-  if (submitButton) submitButton.disabled = true;
-  if (setupStatus) setupStatus.textContent = "Creating admin...";
-  try {
-    await api("/api/setup", {
-      method: "POST",
-      body: JSON.stringify({
-        username: setupUsername.value,
-        password: setupPassword.value,
-        metubeUrl: setupMetubeUrl.value,
-        publicUrl: setupPublicUrl.value
-      })
-    });
-    await boot();
-  } catch (error) {
-    if (error.message === "Setup is already complete") {
-      state.session = await api("/api/session");
-      hideSetup();
-      showLogin();
-      if (loginStatus) loginStatus.textContent = "Setup is complete. Sign in with your admin account.";
-      return;
-    }
-    if (setupStatus) setupStatus.textContent = error.message;
-  } finally {
-    if (submitButton) submitButton.disabled = false;
-  }
-});
-
-setupLoginButton?.addEventListener("click", async () => {
-  location.href = "/login.html";
 });
 
 logoutButton?.addEventListener("click", async () => {

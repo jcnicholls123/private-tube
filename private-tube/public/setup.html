@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Set up - PrivateTube</title>
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <section class="login-overlay">
+      <form class="login-box" method="post" action="/form-setup">
+        <h1>Set up PrivateTube</h1>
+        <input name="username" autocomplete="username" placeholder="Admin username" value="admin" required>
+        <input name="password" autocomplete="new-password" type="password" placeholder="Admin password" required>
+        <input name="metubeUrl" type="url" placeholder="MeTube URL, e.g. http://10.69.24.3:30094">
+        <input name="publicUrl" type="url" placeholder="Cast URL, blank for auto">
+        <button type="submit">Create admin</button>
+        <a class="text-link" href="/login.html">Sign in instead</a>
+        <p id="setupStatus"></p>
+      </form>
+    </section>
+    <script>
+      const error = new URLSearchParams(location.search).get("error");
+      if (error) {
+        document.querySelector("#setupStatus").textContent =
+          error === "missing" ? "Username and password are required" : "Setup failed. Check container logs.";
+      }
+    </script>
+  </body>
+</html>

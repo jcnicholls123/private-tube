@@ -398,6 +398,10 @@ function redirect(res, location) {
   res.end();
 }
 
+function wantsAppShell(pathname) {
+  return pathname === "/" || pathname === "/index.html";
+}
+
 function requireAuth(req, res) {
   const session = getSession(req);
   if (session) return session;
@@ -918,11 +922,40 @@ async function handleFormLogin(req, res) {
   }
 }
 
+async function handleFormSetup(req, res) {
+  try {
+    if (!setupRequired()) return redirect(res, "/login.html");
+    const payload = await readFormBody(req);
+    if (!payload.username || !payload.password) {
+      return redirect(res, "/setup.html?error=missing");
+    }
+    console.log(`Creating initial admin user '${payload.username}'`);
+    upsertUser({
+      username: payload.username,
+      role: "admin",
+      passwordHash: hashPassword(payload.password),
+      createdAt: new Date().toISOString()
+    });
+    if (payload.metubeUrl) setAppSetting("metube_url", String(payload.metubeUrl).replace(/\/$/, ""));
+    if (payload.publicUrl) setAppSetting("public_url", String(payload.publicUrl).replace(/\/$/, ""));
+
+    const token = crypto.randomBytes(32).toString("base64url");
+    const session = { username: payload.username, role: "admin" };
+    sessions.set(token, session);
+    setSessionCookie(res, token);
+    return redirect(res, "/");
+  } catch (error) {
+    console.error("Form setup failed:", error);
+    return redirect(res, "/setup.html?error=failed");
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   try {
     if (url.pathname === "/form-login" && req.method === "POST") return await handleFormLogin(req, res);
+    if (url.pathname === "/form-setup" && req.method === "POST") return await handleFormSetup(req, res);
 
     if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url);
 
@@ -938,6 +971,11 @@ const server = http.createServer(async (req, res) => {
         return sendText(res, 403, "Cast URL expired");
       }
       return await streamMedia(req, res, video.path);
+    }
+
+    if (wantsAppShell(url.pathname) && AUTH_ENABLED) {
+      if (setupRequired()) return redirect(res, "/setup.html");
+      if (!getSession(req)) return redirect(res, "/login.html");
     }
 
     return await serveStatic(res, url.pathname);
