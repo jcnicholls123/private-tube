@@ -37,4 +37,5 @@ jobs:
           push: true
           tags: |
             ghcr.io/jcnicholls123/private-tube:latest
+            ghcr.io/jcnicholls123/private-tube:truenas
             ghcr.io/jcnicholls123/private-tube:${{ github.sha }}
