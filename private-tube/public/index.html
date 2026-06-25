@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PrivateTube</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="PrivateTube home">
+        <span class="brand-mark">▶</span>
+        <span>PrivateTube</span>
+      </a>
+      <label class="search">
+        <span class="sr-only">Search videos</span>
+        <input id="searchInput" type="search" placeholder="Search your library">
+      </label>
+      <button id="rescanButton" class="icon-button" type="button" title="Rescan library">⟳</button>
+    </header>
+
+    <main class="shell">
+      <aside class="sidebar">
+        <button class="nav-item active" type="button" data-filter="all">Home</button>
+        <button class="nav-item" type="button" data-filter="recent">Latest</button>
+        <button class="nav-item" type="button" data-filter="channels">Channels</button>
+        <div class="add-panel">
+          <form id="addForm">
+            <label for="urlInput">Add a video</label>
+            <div class="add-row">
+              <input id="urlInput" type="url" placeholder="YouTube URL">
+              <button type="submit">Add</button>
+            </div>
+            <p id="addStatus"></p>
+          </form>
+        </div>
+      </aside>
+
+      <section class="content" aria-live="polite">
+        <div class="section-title">
+          <h1 id="viewTitle">Home</h1>
+          <p id="viewMeta"></p>
+        </div>
+        <div id="channelStrip" class="channel-strip"></div>
+        <div id="grid" class="video-grid"></div>
+        <div id="emptyState" class="empty-state" hidden>
+          <h2>No videos found</h2>
+          <p>Once MeTube or a mounted library saves videos here, they will appear on this page.</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

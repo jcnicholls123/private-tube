@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Watch - PrivateTube</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="PrivateTube home">
+        <span class="brand-mark">▶</span>
+        <span>PrivateTube</span>
+      </a>
+      <label class="search">
+        <span class="sr-only">Search videos</span>
+        <input id="searchInput" type="search" placeholder="Search your library">
+      </label>
+    </header>
+
+    <main class="watch-layout">
+      <section class="player-panel">
+        <video id="player" controls autoplay playsinline></video>
+        <h1 id="videoTitle"></h1>
+        <a id="channelLink" class="channel-link" href="/"></a>
+      </section>
+      <aside>
+        <h2>Up next</h2>
+        <div id="relatedGrid" class="related-list"></div>
+      </aside>
+    </main>
+
+    <script src="/watch.js" type="module"></script>
+  </body>
+</html>

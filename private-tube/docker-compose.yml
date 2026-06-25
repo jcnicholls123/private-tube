@@ -1,0 +1,15 @@
+services:
+  private-tube:
+    build: .
+    container_name: private-tube
+    restart: unless-stopped
+    ports:
+      - "3020:3020"
+    environment:
+      PORT: "3020"
+      MEDIA_DIR: /media
+      # Optional: set this to your MeTube URL to submit downloads from the sidebar.
+      # METUBE_URL: http://TRUENAS-IP:30094
+    volumes:
+      # TrueNAS: change this to the folder where MeTube/Pinchflat stores videos.
+      - /mnt/Media/downloads/YouTube:/media:ro

@@ -1,0 +1,12 @@
+{
+  "name": "private-tube",
+  "version": "0.1.0",
+  "description": "A lightweight self-hosted YouTube-style web app for local video libraries.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
