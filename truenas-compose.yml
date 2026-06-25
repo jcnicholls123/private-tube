@@ -18,7 +18,10 @@ services:
       ADMIN_PASSWORD: change-me
       # Set to "true" for one restart to force-reset the admin password, then set back to "false".
       RESET_ADMIN_PASSWORD: "false"
+      # Used only to initialize the SQLite-stored cast secret.
       CAST_SECRET: change-this-too
+      # Set to "true" for one restart to rotate the SQLite-stored cast secret.
+      RESET_CAST_SECRET: "false"
       AUTH_ENABLED: "true"
       # Set to "true" only if you want retention rules to delete local files.
       ALLOW_DELETE: "false"

@@ -16,6 +16,7 @@ services:
       ADMIN_PASSWORD: change-me
       RESET_ADMIN_PASSWORD: "false"
       CAST_SECRET: change-this-too
+      RESET_CAST_SECRET: "false"
       AUTH_ENABLED: "true"
       ALLOW_DELETE: "false"
     volumes:

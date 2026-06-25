@@ -17,7 +17,6 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const AUTH_ENABLED = process.env.AUTH_ENABLED !== "false" && Boolean(ADMIN_USERNAME && ADMIN_PASSWORD);
 const RESET_ADMIN_PASSWORD = process.env.RESET_ADMIN_PASSWORD === "true";
 const ALLOW_DELETE = process.env.ALLOW_DELETE === "true";
-const CAST_SECRET = process.env.CAST_SECRET || ADMIN_PASSWORD || crypto.randomBytes(32).toString("hex");
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi"]);
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
@@ -36,10 +35,8 @@ let library = {
   videos: [],
   channels: []
 };
-let store = {
-  users: [],
-  subscriptions: []
-};
+let db;
+let castSecret = "";
 const sessions = new Map();
 
 function sendJson(res, statusCode, body) {
@@ -82,7 +79,7 @@ function mediaContentType(filePath) {
 }
 
 function signCastUrl(videoId, expires) {
-  return crypto.createHmac("sha256", CAST_SECRET).update(`${videoId}:${expires}`).digest("hex");
+  return crypto.createHmac("sha256", castSecret).update(`${videoId}:${expires}`).digest("hex");
 }
 
 function verifyCastUrl(videoId, expires, sig) {
@@ -142,42 +139,187 @@ async function readJson(filePath, fallback) {
   }
 }
 
-async function writeJson(filePath, value) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
+function legacyStorePath() {
+  return path.join(DATA_DIR, "private-tube.json");
 }
 
-function storePath() {
-  return path.join(DATA_DIR, "private-tube.json");
+function databasePath() {
+  return path.join(DATA_DIR, "private-tube.sqlite");
+}
+
+async function openDatabase() {
+  const sqlite = await import("node:sqlite");
+  return new sqlite.DatabaseSync(databasePath());
+}
+
+function run(sql, params = []) {
+  db.prepare(sql).run(...params);
+}
+
+function get(sql, params = []) {
+  return db.prepare(sql).get(...params);
+}
+
+function all(sql, params = []) {
+  return db.prepare(sql).all(...params);
+}
+
+function initSchema() {
+  run("PRAGMA journal_mode = WAL");
+  run("PRAGMA foreign_keys = ON");
+  run(`CREATE TABLE IF NOT EXISTS users (
+    username TEXT PRIMARY KEY,
+    role TEXT NOT NULL DEFAULT 'viewer',
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT
+  )`);
+  run(`CREATE TABLE IF NOT EXISTS subscriptions (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    quality TEXT NOT NULL DEFAULT 'best',
+    interval_hours INTEGER NOT NULL DEFAULT 24,
+    retention_days INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    last_run_at TEXT,
+    last_status TEXT
+  )`);
+  run(`CREATE TABLE IF NOT EXISTS secrets (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT
+  )`);
+}
+
+function getSecret(key) {
+  return get("SELECT value FROM secrets WHERE key = ?", [key])?.value || "";
+}
+
+function setSecret(key, value) {
+  const now = new Date().toISOString();
+  run(`INSERT INTO secrets (key, value, created_at, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, [key, value, now, now]);
+}
+
+function getUsers() {
+  return all("SELECT username, role, password_hash AS passwordHash, created_at AS createdAt, updated_at AS updatedAt FROM users ORDER BY created_at");
+}
+
+function getUser(username) {
+  return get("SELECT username, role, password_hash AS passwordHash, created_at AS createdAt, updated_at AS updatedAt FROM users WHERE username = ?", [username]);
+}
+
+function upsertUser(user) {
+  const now = new Date().toISOString();
+  run(`INSERT INTO users (username, role, password_hash, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET role = excluded.role, password_hash = excluded.password_hash, updated_at = excluded.updated_at`, [
+    user.username,
+    user.role || "viewer",
+    user.passwordHash,
+    user.createdAt || now,
+    user.updatedAt || now
+  ]);
+}
+
+function deleteUser(username) {
+  run("DELETE FROM users WHERE username = ?", [username]);
+}
+
+function getSubscriptions() {
+  return all(`SELECT id, name, url, quality, interval_hours AS intervalHours, retention_days AS retentionDays,
+    enabled, created_at AS createdAt, last_run_at AS lastRunAt, last_status AS lastStatus
+    FROM subscriptions ORDER BY created_at DESC`).map((item) => ({
+    ...item,
+    enabled: Boolean(item.enabled)
+  }));
+}
+
+function getSubscription(id) {
+  const item = get(`SELECT id, name, url, quality, interval_hours AS intervalHours, retention_days AS retentionDays,
+    enabled, created_at AS createdAt, last_run_at AS lastRunAt, last_status AS lastStatus
+    FROM subscriptions WHERE id = ?`, [id]);
+  return item ? { ...item, enabled: Boolean(item.enabled) } : null;
+}
+
+function insertSubscription(subscription) {
+  run(`INSERT INTO subscriptions
+    (id, name, url, quality, interval_hours, retention_days, enabled, created_at, last_run_at, last_status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    subscription.id,
+    subscription.name,
+    subscription.url,
+    subscription.quality || "best",
+    Number(subscription.intervalHours || 24),
+    Number(subscription.retentionDays || 0),
+    subscription.enabled === false ? 0 : 1,
+    subscription.createdAt,
+    subscription.lastRunAt,
+    subscription.lastStatus
+  ]);
+}
+
+function updateSubscriptionRun(subscription) {
+  run("UPDATE subscriptions SET last_run_at = ?, last_status = ? WHERE id = ?", [
+    subscription.lastRunAt,
+    subscription.lastStatus,
+    subscription.id
+  ]);
+}
+
+function deleteSubscription(id) {
+  run("DELETE FROM subscriptions WHERE id = ?", [id]);
+}
+
+async function migrateLegacyJson() {
+  const legacy = await readJson(legacyStorePath(), null);
+  if (!legacy) return;
+
+  for (const user of legacy.users || []) {
+    if (!getUser(user.username)) upsertUser(user);
+  }
+
+  for (const subscription of legacy.subscriptions || []) {
+    if (!getSubscription(subscription.id)) insertSubscription(subscription);
+  }
+
+  await fs.rename(legacyStorePath(), path.join(DATA_DIR, "private-tube.json.migrated")).catch(() => {});
 }
 
 async function loadStore() {
   await fs.mkdir(DATA_DIR, { recursive: true });
-  store = await readJson(storePath(), { users: [], subscriptions: [] });
-  store.users ||= [];
-  store.subscriptions ||= [];
+  db = await openDatabase();
+  initSchema();
+  await migrateLegacyJson();
 
   if (AUTH_ENABLED) {
-    const adminUser = store.users.find((user) => user.username === ADMIN_USERNAME);
+    const adminUser = getUser(ADMIN_USERNAME);
     if (!adminUser) {
-      store.users.unshift({
+      upsertUser({
         username: ADMIN_USERNAME,
         role: "admin",
         passwordHash: hashPassword(ADMIN_PASSWORD),
         createdAt: new Date().toISOString()
       });
-      await saveStore();
     } else if (RESET_ADMIN_PASSWORD) {
-      adminUser.role = "admin";
-      adminUser.passwordHash = hashPassword(ADMIN_PASSWORD);
-      adminUser.updatedAt = new Date().toISOString();
-      await saveStore();
+      upsertUser({
+        ...adminUser,
+        role: "admin",
+        passwordHash: hashPassword(ADMIN_PASSWORD),
+        updatedAt: new Date().toISOString()
+      });
     }
   }
-}
 
-async function saveStore() {
-  await writeJson(storePath(), store);
+  castSecret = getSecret("cast_secret");
+  if (!castSecret || process.env.RESET_CAST_SECRET === "true") {
+    castSecret = process.env.CAST_SECRET || crypto.randomBytes(32).toString("hex");
+    setSecret("cast_secret", castSecret);
+  }
 }
 
 async function readBody(req) {
@@ -366,18 +508,18 @@ async function runSubscription(subscription, force = false) {
   const result = await addToMetube(subscription.url, subscription.quality || "best");
   subscription.lastRunAt = new Date().toISOString();
   subscription.lastStatus = result.ok ? "queued" : `failed ${result.status}`;
-  await saveStore();
+  updateSubscriptionRun(subscription);
 }
 
 async function runSubscriptions() {
-  for (const subscription of store.subscriptions) {
+  for (const subscription of getSubscriptions()) {
     if (subscription.enabled === false) continue;
     try {
       await runSubscription(subscription);
     } catch (error) {
       subscription.lastRunAt = new Date().toISOString();
       subscription.lastStatus = error.message;
-      await saveStore();
+      updateSubscriptionRun(subscription);
     }
   }
 }
@@ -387,7 +529,7 @@ async function applyRetention() {
   let deleted = 0;
   const now = Date.now();
 
-  for (const subscription of store.subscriptions) {
+  for (const subscription of getSubscriptions()) {
     const retentionDays = Number(subscription.retentionDays || 0);
     if (!retentionDays) continue;
     const channelSlug = slugify(subscription.name || "");
@@ -500,7 +642,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/login" && req.method === "POST") {
     if (!AUTH_ENABLED) return sendJson(res, 200, { ok: true });
     const payload = await readBody(req);
-    const user = store.users.find((item) => item.username === payload.username);
+    const user = getUser(payload.username);
     if (!user || !verifyPassword(payload.password || "", user.passwordHash)) {
       return sendJson(res, 401, { error: "Invalid username or password" });
     }
@@ -527,6 +669,7 @@ async function handleApi(req, res, url) {
       metubeEnabled: Boolean(METUBE_URL),
       metubeUrl: METUBE_URL,
       allowDelete: ALLOW_DELETE,
+      database: "sqlite",
       qualityPresets: QUALITY_PRESETS,
       user: session
     });
@@ -555,7 +698,7 @@ async function handleApi(req, res, url) {
     if (!requireAdmin(req, res)) return;
 
     if (req.method === "GET") {
-      return sendJson(res, 200, { users: store.users.map(publicUser) });
+      return sendJson(res, 200, { users: getUsers().map(publicUser) });
     }
 
     if (req.method === "POST") {
@@ -563,17 +706,16 @@ async function handleApi(req, res, url) {
       if (!payload.username || !payload.password) {
         return sendJson(res, 400, { error: "Username and password are required" });
       }
-      if (store.users.some((user) => user.username === payload.username)) {
+      if (getUser(payload.username)) {
         return sendJson(res, 409, { error: "User already exists" });
       }
-      store.users.push({
+      upsertUser({
         username: payload.username,
         role: payload.role === "admin" ? "admin" : "viewer",
         passwordHash: hashPassword(payload.password),
         createdAt: new Date().toISOString()
       });
-      await saveStore();
-      return sendJson(res, 201, { users: store.users.map(publicUser) });
+      return sendJson(res, 201, { users: getUsers().map(publicUser) });
     }
   }
 
@@ -581,13 +723,12 @@ async function handleApi(req, res, url) {
     if (!requireAdmin(req, res)) return;
     const username = safeDecode(url.pathname.slice("/api/users/".length));
     if (username === session.username) return sendJson(res, 400, { error: "You cannot delete yourself" });
-    store.users = store.users.filter((user) => user.username !== username);
-    await saveStore();
-    return sendJson(res, 200, { users: store.users.map(publicUser) });
+    deleteUser(username);
+    return sendJson(res, 200, { users: getUsers().map(publicUser) });
   }
 
   if (url.pathname === "/api/subscriptions") {
-    if (req.method === "GET") return sendJson(res, 200, { subscriptions: store.subscriptions });
+    if (req.method === "GET") return sendJson(res, 200, { subscriptions: getSubscriptions() });
     if (!requireAdmin(req, res)) return;
 
     if (req.method === "POST") {
@@ -607,9 +748,8 @@ async function handleApi(req, res, url) {
         lastRunAt: null,
         lastStatus: "new"
       };
-      store.subscriptions.push(subscription);
-      await saveStore();
-      return sendJson(res, 201, { subscriptions: store.subscriptions });
+      insertSubscription(subscription);
+      return sendJson(res, 201, { subscriptions: getSubscriptions() });
     }
   }
 
@@ -618,13 +758,12 @@ async function handleApi(req, res, url) {
     const parts = url.pathname.slice("/api/subscriptions/".length).split("/");
     const id = parts[0];
     const action = parts[1];
-    const subscription = store.subscriptions.find((item) => item.id === id);
+    const subscription = getSubscription(id);
     if (!subscription) return sendJson(res, 404, { error: "Subscription not found" });
 
     if (req.method === "DELETE") {
-      store.subscriptions = store.subscriptions.filter((item) => item.id !== id);
-      await saveStore();
-      return sendJson(res, 200, { subscriptions: store.subscriptions });
+      deleteSubscription(id);
+      return sendJson(res, 200, { subscriptions: getSubscriptions() });
     }
 
     if (req.method === "POST" && action === "run") {

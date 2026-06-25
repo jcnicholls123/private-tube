@@ -29,6 +29,7 @@ ADMIN_USERNAME: admin
 ADMIN_PASSWORD: change-me
 RESET_ADMIN_PASSWORD: "false"
 CAST_SECRET: change-this-too
+RESET_CAST_SECRET: "false"
 ```
 
 If you cannot log in after changing the password, set this to `"true"` for one restart:
@@ -38,6 +39,12 @@ RESET_ADMIN_PASSWORD: "true"
 ```
 
 After logging in successfully, set it back to `"false"` and redeploy.
+
+`CAST_SECRET` is saved into SQLite on first startup. To rotate it later, set this to `"true"` for one restart:
+
+```yaml
+RESET_CAST_SECRET: "true"
+```
 
 For Chromecast, set a LAN-reachable app URL:
 
@@ -52,6 +59,12 @@ PrivateTube stores local users and channel subscriptions in:
 ```
 
 Create that dataset/folder before deploying.
+
+Auth data, password hashes, subscriptions, and app secrets are stored in:
+
+```text
+/data/private-tube.sqlite
+```
 
 The app listens on:
 

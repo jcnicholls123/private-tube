@@ -59,10 +59,13 @@ environment:
   ADMIN_PASSWORD: change-me
   RESET_ADMIN_PASSWORD: "false"
   CAST_SECRET: change-this-too
+  RESET_CAST_SECRET: "false"
   AUTH_ENABLED: "true"
 ```
 
 If the stored admin password needs resetting, set `RESET_ADMIN_PASSWORD` to `"true"` for one restart, then change it back to `"false"`.
+
+`CAST_SECRET` is saved into SQLite on first startup. To rotate it later, set `RESET_CAST_SECRET` to `"true"` for one restart.
 
 Mount `/data` so local users and subscriptions survive container updates:
 
@@ -70,6 +73,8 @@ Mount `/data` so local users and subscriptions survive container updates:
 volumes:
   - /mnt/Media/apps/private-tube:/data
 ```
+
+PrivateTube stores users, password hashes, subscriptions, and app secrets in `/data/private-tube.sqlite`.
 
 Channel subscriptions periodically submit saved channel or playlist URLs to MeTube.
 

@@ -1,3 +1,4 @@
 *.log
 media/
 data/
+sqlite-test-data/
