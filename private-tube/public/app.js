@@ -222,6 +222,32 @@ function selectFilter(filter, channelId = "") {
   render();
 }
 
+function channelDisplay(channel) {
+  const videos = state.library.videos.filter((video) => video.channelId === channel.id);
+  const namedVideo = videos.find((video) => video.channel && video.channel !== "Uploads");
+  const name = channel.name === "Uploads" && namedVideo ? namedVideo.channel : channel.name;
+  const thumbnail = channel.thumbnail || videos.find((video) => video.thumbnail)?.thumbnail || null;
+  const count = Math.max(channel.count || 0, videos.length);
+  return { ...channel, name, thumbnail, count };
+}
+
+function visibleChannels() {
+  const byId = new Map();
+  for (const channel of state.library.channels.map(channelDisplay)) {
+    const key = channel.name === "Uploads" ? "uploads" : channel.id;
+    const existing = byId.get(key);
+    if (!existing) {
+      byId.set(key, channel);
+      continue;
+    }
+    existing.count += channel.count;
+    existing.subscribed = existing.subscribed || channel.subscribed;
+    existing.thumbnail = existing.thumbnail || channel.thumbnail;
+    existing.lastStatus = existing.lastStatus || channel.lastStatus;
+  }
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function renderChannels() {
   channelStrip.hidden = state.filter === "channels" || state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
   if (channelStrip.hidden) {
@@ -229,7 +255,7 @@ function renderChannels() {
     return;
   }
 
-  channelStrip.innerHTML = state.library.channels
+  channelStrip.innerHTML = visibleChannels()
     .map((channel) => `
       <button class="channel-pill ${state.channelId === channel.id ? "active" : ""}" type="button" data-channel="${channel.id}">
         <span>${channel.name}</span>
@@ -300,7 +326,7 @@ function channelThumb(channel) {
 function renderChannelDirectory() {
   grid.hidden = false;
   grid.classList.add("channel-grid");
-  grid.innerHTML = state.library.channels.map((channel) => `
+  grid.innerHTML = visibleChannels().map((channel) => `
     <article class="channel-card">
       <button type="button" data-channel="${channel.id}" class="channel-card-button">
         <span class="channel-card-thumb">${channelThumb(channel)}</span>
@@ -373,12 +399,13 @@ function renderTitle(videos) {
     viewTitle.textContent = "Settings";
     viewMeta.textContent = "Stored in SQLite";
   } else if (state.filter === "channel" && state.channelId) {
-    const channel = state.library.channels.find((item) => item.id === state.channelId);
+    const channel = visibleChannels().find((item) => item.id === state.channelId);
     viewTitle.textContent = channel ? channel.name : "Channel";
     viewMeta.textContent = `${videos.length} video${videos.length === 1 ? "" : "s"}`;
   } else if (state.filter === "channels") {
     viewTitle.textContent = "Channels";
-    viewMeta.textContent = `${state.library.channels.length} channel${state.library.channels.length === 1 ? "" : "s"}`;
+    const channels = visibleChannels();
+    viewMeta.textContent = `${channels.length} channel${channels.length === 1 ? "" : "s"}`;
   } else if (state.filter === "recent") {
     viewTitle.textContent = "Latest";
     viewMeta.textContent = `${videos.length} video${videos.length === 1 ? "" : "s"}`;

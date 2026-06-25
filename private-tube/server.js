@@ -23,6 +23,8 @@ const ALLOW_DELETE = process.env.ALLOW_DELETE === "true";
 const THUMBNAILS_ENABLED = process.env.THUMBNAILS_ENABLED !== "false";
 const THUMBNAIL_TIME = process.env.THUMBNAIL_TIME || "00:00:05";
 const METADATA_FETCH_ENABLED = process.env.METADATA_FETCH_ENABLED !== "false";
+const AUTO_METADATA_FETCH = process.env.AUTO_METADATA_FETCH !== "false";
+const AUTO_METADATA_FETCH_LIMIT = Number(process.env.AUTO_METADATA_FETCH_LIMIT || 12);
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi"]);
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
@@ -76,6 +78,8 @@ let library = {
 };
 let db;
 let castSecret = "";
+let autoMetadataFetchRunning = false;
+const metadataFetchFailures = new Set();
 const sessions = new Map();
 
 function sendJson(res, statusCode, body) {
@@ -809,7 +813,7 @@ async function walk(dir, files = []) {
   return files;
 }
 
-async function scanLibrary() {
+async function scanLibrary(options = {}) {
   await fs.mkdir(MEDIA_DIR, { recursive: true });
   const files = await walk(MEDIA_DIR);
   const videos = [];
@@ -874,12 +878,53 @@ async function scanLibrary() {
     }
   }
 
+  for (const channel of channelMap.values()) {
+    if (channel.name !== "Uploads") continue;
+    const namedVideo = videos.find((video) => video.channelId === channel.id && video.channel && video.channel !== "Uploads");
+    if (namedVideo) channel.name = namedVideo.channel;
+  }
+
   videos.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
   library = {
     generatedAt: new Date().toISOString(),
     videos,
     channels: [...channelMap.values()].sort((a, b) => a.name.localeCompare(b.name))
   };
+
+  if (!options.skipAutoMetadata) scheduleAutoMetadataFetch();
+}
+
+function shouldAutoFetchMetadata(video) {
+  if (!AUTO_METADATA_FETCH || !METADATA_FETCH_ENABLED) return false;
+  if (metadataFetchFailures.has(video.id)) return false;
+  return !video.description || !video.sourceUrl || !video.uploadedAt || video.channel === "Uploads";
+}
+
+function scheduleAutoMetadataFetch() {
+  if (autoMetadataFetchRunning) return;
+  const candidates = library.videos.filter(shouldAutoFetchMetadata).slice(0, AUTO_METADATA_FETCH_LIMIT);
+  if (!candidates.length) return;
+  setTimeout(() => autoPopulateMetadata(candidates), 1500).unref();
+}
+
+async function autoPopulateMetadata(candidates) {
+  if (autoMetadataFetchRunning) return;
+  autoMetadataFetchRunning = true;
+  let updated = false;
+
+  for (const video of candidates) {
+    try {
+      await fetchYouTubeMetadata(video);
+      updated = true;
+      metadataFetchFailures.delete(video.id);
+    } catch (error) {
+      metadataFetchFailures.add(video.id);
+      console.warn(`Could not auto-fetch metadata for ${video.title}: ${error.message}`);
+    }
+  }
+
+  autoMetadataFetchRunning = false;
+  if (updated) await scanLibrary({ skipAutoMetadata: true });
 }
 
 async function clearGeneratedThumbnails() {

@@ -466,7 +466,8 @@ button {
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at 50% 0, rgba(255, 0, 51, 0.13), transparent 32%),
+    radial-gradient(circle at 50% 0, rgba(255, 0, 51, 0.12), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 42%, transparent), transparent 45%),
     var(--bg);
 }
 
@@ -475,9 +476,9 @@ button {
   gap: 12px;
   width: min(380px, 100%);
   padding: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  background: rgba(24, 24, 24, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 96%, var(--bg));
   box-shadow: var(--shadow);
 }
 
@@ -489,6 +490,10 @@ button {
   margin: 10px 0 6px;
   font-size: 28px;
   line-height: 1.1;
+}
+
+.login-box .login-brand {
+  margin-bottom: 2px;
 }
 
 .login-box button {
