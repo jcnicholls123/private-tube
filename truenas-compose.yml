@@ -16,6 +16,8 @@ services:
       # Change these before exposing the app to your network.
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: change-me
+      # Set to "true" for one restart to force-reset the admin password, then set back to "false".
+      RESET_ADMIN_PASSWORD: "false"
       CAST_SECRET: change-this-too
       AUTH_ENABLED: "true"
       # Set to "true" only if you want retention rules to delete local files.

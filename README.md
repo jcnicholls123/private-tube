@@ -27,8 +27,17 @@ Also change the initial admin password:
 ```yaml
 ADMIN_USERNAME: admin
 ADMIN_PASSWORD: change-me
+RESET_ADMIN_PASSWORD: "false"
 CAST_SECRET: change-this-too
 ```
+
+If you cannot log in after changing the password, set this to `"true"` for one restart:
+
+```yaml
+RESET_ADMIN_PASSWORD: "true"
+```
+
+After logging in successfully, set it back to `"false"` and redeploy.
 
 For Chromecast, set a LAN-reachable app URL:
 

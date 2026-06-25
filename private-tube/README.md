@@ -57,9 +57,12 @@ Set an initial admin account:
 environment:
   ADMIN_USERNAME: admin
   ADMIN_PASSWORD: change-me
+  RESET_ADMIN_PASSWORD: "false"
   CAST_SECRET: change-this-too
   AUTH_ENABLED: "true"
 ```
+
+If the stored admin password needs resetting, set `RESET_ADMIN_PASSWORD` to `"true"` for one restart, then change it back to `"false"`.
 
 Mount `/data` so local users and subscriptions survive container updates:
 

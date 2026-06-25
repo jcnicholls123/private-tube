@@ -15,6 +15,7 @@ const CHANNEL_CHECK_INTERVAL_MS = Number(process.env.CHANNEL_CHECK_INTERVAL_MS |
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const AUTH_ENABLED = process.env.AUTH_ENABLED !== "false" && Boolean(ADMIN_USERNAME && ADMIN_PASSWORD);
+const RESET_ADMIN_PASSWORD = process.env.RESET_ADMIN_PASSWORD === "true";
 const ALLOW_DELETE = process.env.ALLOW_DELETE === "true";
 const CAST_SECRET = process.env.CAST_SECRET || ADMIN_PASSWORD || crypto.randomBytes(32).toString("hex");
 
@@ -156,14 +157,22 @@ async function loadStore() {
   store.users ||= [];
   store.subscriptions ||= [];
 
-  if (AUTH_ENABLED && !store.users.some((user) => user.username === ADMIN_USERNAME)) {
-    store.users.unshift({
-      username: ADMIN_USERNAME,
-      role: "admin",
-      passwordHash: hashPassword(ADMIN_PASSWORD),
-      createdAt: new Date().toISOString()
-    });
-    await saveStore();
+  if (AUTH_ENABLED) {
+    const adminUser = store.users.find((user) => user.username === ADMIN_USERNAME);
+    if (!adminUser) {
+      store.users.unshift({
+        username: ADMIN_USERNAME,
+        role: "admin",
+        passwordHash: hashPassword(ADMIN_PASSWORD),
+        createdAt: new Date().toISOString()
+      });
+      await saveStore();
+    } else if (RESET_ADMIN_PASSWORD) {
+      adminUser.role = "admin";
+      adminUser.passwordHash = hashPassword(ADMIN_PASSWORD);
+      adminUser.updatedAt = new Date().toISOString();
+      await saveStore();
+    }
   }
 }
 
