@@ -485,6 +485,13 @@ setupForm.addEventListener("submit", async (event) => {
     });
     await boot();
   } catch (error) {
+    if (error.message === "Setup is already complete") {
+      state.session = await api("/api/session");
+      hideSetup();
+      showLogin();
+      loginStatus.textContent = "Setup is complete. Sign in with your admin account.";
+      return;
+    }
     setupStatus.textContent = error.message;
   }
 });
