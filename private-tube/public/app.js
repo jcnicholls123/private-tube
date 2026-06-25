@@ -27,6 +27,7 @@ const addStatus = document.querySelector("#addStatus");
 const adminPanel = document.querySelector("#adminPanel");
 const logoutButton = document.querySelector("#logoutButton");
 const menuButton = document.querySelector("#menuButton");
+const menuCloseButton = document.querySelector("#menuCloseButton");
 const appMenu = document.querySelector("#appMenu");
 const menuBackdrop = document.querySelector("#menuBackdrop");
 const downloadStatus = document.querySelector("#downloadStatus");
@@ -90,10 +91,28 @@ async function enableNotifications() {
     notify("Browser notifications are not supported here", "warn");
     return;
   }
+  if (!window.isSecureContext) {
+    localStorage.setItem("pt-notifications", "off");
+    notify("Browser notifications need HTTPS or localhost. In-app notifications are already on.", "warn");
+    render();
+    return;
+  }
   const permission = await Notification.requestPermission();
   localStorage.setItem("pt-notifications", permission === "granted" ? "on" : "off");
-  notify(permission === "granted" ? "Notifications enabled" : "Notifications not enabled", permission === "granted" ? "success" : "warn");
+  notify(permission === "granted" ? "Browser notifications enabled" : "Browser notifications blocked by Chrome", permission === "granted" ? "success" : "warn");
   render();
+}
+
+function notificationStatusText() {
+  if (!("Notification" in window)) return "Browser notifications are not supported here. In-app notifications still work.";
+  if (!window.isSecureContext) return "Browser notifications need HTTPS or localhost. In-app notifications still work on this HTTP TrueNAS URL.";
+  if (Notification.permission === "granted") return "Browser notifications are enabled on this device.";
+  if (Notification.permission === "denied") return "Browser notifications are blocked in this browser.";
+  return "Browser notifications are optional. In-app notifications are already enabled.";
+}
+
+function canUseBrowserNotifications() {
+  return "Notification" in window && window.isSecureContext && Notification.permission !== "denied";
 }
 
 async function api(path, options = {}) {
@@ -466,8 +485,8 @@ function renderSettings() {
       </section>
       <section class="settings-card">
         <h2>Notifications</h2>
-        <p>Use in-app toasts for actions. Browser notifications are optional and stay on this device.</p>
-        <button id="notificationButton" class="secondary-button" type="button">Enable browser notifications</button>
+        <p>${notificationStatusText()}</p>
+        <button id="notificationButton" class="secondary-button" type="button" ${canUseBrowserNotifications() ? "" : "disabled"}>${canUseBrowserNotifications() ? "Enable browser notifications" : "Browser notifications unavailable"}</button>
       </section>
     </div>
     <form id="settingsForm" class="settings-form settings-form-wide cast-settings-form">
@@ -638,6 +657,7 @@ document.querySelectorAll("[data-menu-filter]").forEach((button) => {
 
 menuBackdrop.addEventListener("click", closeMenu);
 menuButton.addEventListener("click", toggleMenu);
+menuCloseButton.addEventListener("click", closeMenu);
 
 searchInput.addEventListener("input", () => {
   state.query = searchInput.value;
@@ -651,11 +671,11 @@ qualitySelect.addEventListener("change", renderQualityInfo);
 rescanButton.addEventListener("click", async () => {
   rescanButton.disabled = true;
   await api("/api/rescan", { method: "POST" });
-    await loadLibrary();
-    rescanButton.disabled = false;
-    closeMenu();
-    notify("Library rescanned", "success");
-  });
+  await loadLibrary();
+  rescanButton.disabled = false;
+  closeMenu();
+  notify("Library rescanned", "success");
+});
 
 addForm.addEventListener("submit", async (event) => {
   event.preventDefault();

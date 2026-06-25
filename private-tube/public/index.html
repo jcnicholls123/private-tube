@@ -34,27 +34,25 @@
     <aside id="appMenu" class="app-menu" hidden aria-label="PrivateTube menu">
       <div class="menu-head">
         <span class="brand-mark" aria-hidden="true"></span>
-        <div>
-          <strong>PrivateTube</strong>
-          <p>Your video library</p>
-        </div>
+        <strong>PrivateTube</strong>
+        <button id="menuCloseButton" class="menu-close" type="button" aria-label="Close menu">Close</button>
       </div>
       <div class="menu-section">
         <span>Browse</span>
-        <button class="menu-item" type="button" data-menu-filter="all"><b>Home</b><small>All videos</small></button>
-        <button class="menu-item" type="button" data-menu-filter="recent"><b>Latest</b><small>Newest downloads</small></button>
-        <button class="menu-item" type="button" data-menu-filter="channels"><b>Channels</b><small>Browse channels</small></button>
+        <button class="menu-item" type="button" data-menu-filter="all"><i class="menu-icon home"></i><span>Home</span></button>
+        <button class="menu-item" type="button" data-menu-filter="recent"><i class="menu-icon latest"></i><span>Latest</span></button>
+        <button class="menu-item" type="button" data-menu-filter="channels"><i class="menu-icon channels"></i><span>Channels</span></button>
       </div>
       <div class="menu-section admin-only">
         <span>Manage</span>
-        <button class="menu-item" type="button" data-menu-filter="subscriptions"><b>Subscriptions</b><small>Auto downloads</small></button>
-        <button class="menu-item" type="button" data-menu-filter="users"><b>Users</b><small>Local accounts</small></button>
-        <button class="menu-item" type="button" data-menu-filter="settings"><b>Settings</b><small>Cast, theme, notifications</small></button>
+        <button class="menu-item" type="button" data-menu-filter="subscriptions"><i class="menu-icon subscriptions"></i><span>Subscriptions</span></button>
+        <button class="menu-item" type="button" data-menu-filter="users"><i class="menu-icon users"></i><span>Users</span></button>
+        <button class="menu-item" type="button" data-menu-filter="settings"><i class="menu-icon settings"></i><span>Settings</span></button>
       </div>
       <div class="menu-section">
         <span>Actions</span>
-        <button id="rescanButton" class="menu-item" type="button"><b>Rescan library</b><small>Refresh metadata</small></button>
-        <button id="logoutButton" class="menu-item danger" type="button"><b>Log out</b><small>End this session</small></button>
+        <button id="rescanButton" class="menu-item" type="button"><i class="menu-icon rescan"></i><span>Rescan library</span></button>
+        <button id="logoutButton" class="menu-item danger" type="button"><i class="menu-icon logout"></i><span>Log out</span></button>
       </div>
     </aside>
 

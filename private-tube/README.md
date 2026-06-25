@@ -129,4 +129,4 @@ Video title.info.json
 Video title.description
 ```
 
-Enable metadata/description sidecars in MeTube or yt-dlp if you want descriptions to appear on the watch page.
+Enable metadata/description sidecars in MeTube or yt-dlp for the best results. If a video has no sidecar, the watch page can also try fetching metadata with `yt-dlp` when the filename or metadata contains the YouTube video ID.

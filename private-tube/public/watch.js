@@ -11,6 +11,7 @@ const airplayButton = document.querySelector("#airplayButton");
 const castStatus = document.querySelector("#castStatus");
 const castDiagnostics = document.querySelector("#castDiagnostics");
 const videoDescription = document.querySelector("#videoDescription");
+const metadataButton = document.querySelector("#metadataButton");
 
 let currentVideo = null;
 let castReady = false;
@@ -45,8 +46,12 @@ function renderDescription(video) {
   if (video.sourceUrl) lines.push(`<a href="${video.sourceUrl}" target="_blank" rel="noreferrer">Original YouTube page</a>`);
   if (video.description) lines.push(`<p>${video.description.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replace(/\n/g, "<br>")}</p>`);
 
-  videoDescription.hidden = lines.length === 0;
-  videoDescription.innerHTML = lines.join("");
+  metadataButton.hidden = Boolean(video.description);
+  videoDescription.hidden = false;
+  videoDescription.innerHTML = lines.length ? lines.join("") : `
+    <strong>No description saved yet</strong>
+    <p>PrivateTube can read MeTube .info.json/.description sidecars, or try fetching metadata from YouTube if the video ID is in the filename.</p>
+  `;
 }
 
 async function saveProgress(force = false) {
@@ -101,8 +106,11 @@ function renderRelated(videos, current) {
   `).join("");
 }
 
-async function api(path) {
-  const response = await fetch(path);
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { "content-type": "application/json", ...(options.headers || {}) }
+  });
   if (response.status === 401) {
     location.href = "/";
     throw new Error("Authentication required");
@@ -115,7 +123,7 @@ async function api(path) {
 function initializeCastApi() {
   if (!window.cast?.framework || !window.chrome?.cast) {
     setCastStatus(isIOS() ? "Chromecast is not supported in iPhone Safari" : "Cast unavailable");
-    setCastDiagnostics("Chrome did not expose the Google Cast sender API on this page.");
+    setCastDiagnostics("The Google Cast sender API did not become available. On Windows Chrome, this is usually browser Cast being disabled, blocked by the network, or the page not being reachable from the Chromecast.");
     return;
   }
 
@@ -128,12 +136,15 @@ function initializeCastApi() {
   castReady = true;
   castButton.disabled = !currentVideo;
   setCastStatus("Ready to cast");
-  setCastDiagnostics(isLocalCastHost() ? "You opened PrivateTube on localhost. Chromecast needs the TrueNAS LAN URL in Settings > Chromecast public URL." : "");
+  setCastDiagnostics(isLocalCastHost() ? "You opened PrivateTube on localhost. Chromecast needs the TrueNAS LAN URL in Settings > Chromecast public URL." : "Cast SDK loaded. If the receiver still fails, check the Chromecast public URL in Settings.");
 }
 
 window.__onGCastApiAvailable = (isAvailable) => {
   if (isAvailable) initializeCastApi();
-  else setCastStatus(isIOS() ? "Chromecast is not supported in iPhone Safari" : "Cast unavailable");
+  else {
+    setCastStatus(isIOS() ? "Chromecast is not supported in iPhone Safari" : "Cast unavailable");
+    setCastDiagnostics("Chrome loaded the Cast script, but the sender API reported unavailable.");
+  }
 };
 
 function loadCastSdk() {
@@ -156,8 +167,8 @@ function loadCastSdk() {
 
   window.setTimeout(() => {
     if (!castReady) {
-      setCastStatus("Use Google Chrome with a Chromecast on this network");
-      setCastDiagnostics("If this is Chrome on Windows, check that Cast is enabled, the Chromecast is on the same network, and this page is opened by the TrueNAS LAN URL.");
+      setCastStatus("Cast sender not available");
+      setCastDiagnostics("Chrome did not expose Cast within 5 seconds. Check Chrome's Cast menu can see the device, then set PrivateTube Settings > Chromecast public URL to your TrueNAS LAN URL.");
     }
   }, 5000);
 }
@@ -230,6 +241,23 @@ async function load() {
 }
 
 castButton.addEventListener("click", castCurrentVideo);
+metadataButton.addEventListener("click", async () => {
+  if (!currentVideo) return;
+  metadataButton.disabled = true;
+  metadataButton.textContent = "Fetching...";
+  try {
+    const result = await api(`/api/metadata/${encodeURIComponent(currentVideo.id)}`, { method: "POST" });
+    currentVideo = result.video || currentVideo;
+    renderDescription(currentVideo);
+  } catch (error) {
+    videoDescription.hidden = false;
+    videoDescription.innerHTML = `<strong>Could not fetch description</strong><p>${error.message}</p>`;
+    metadataButton.hidden = false;
+  } finally {
+    metadataButton.disabled = false;
+    metadataButton.textContent = "Fetch description";
+  }
+});
 setupAirPlay();
 loadCastSdk();
 load();

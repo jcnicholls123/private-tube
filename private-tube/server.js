@@ -22,6 +22,7 @@ const RESET_ADMIN_PASSWORD = process.env.RESET_ADMIN_PASSWORD === "true";
 const ALLOW_DELETE = process.env.ALLOW_DELETE === "true";
 const THUMBNAILS_ENABLED = process.env.THUMBNAILS_ENABLED !== "false";
 const THUMBNAIL_TIME = process.env.THUMBNAIL_TIME || "00:00:05";
+const METADATA_FETCH_ENABLED = process.env.METADATA_FETCH_ENABLED !== "false";
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi"]);
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
@@ -569,7 +570,63 @@ async function readSidecarText(candidates) {
   return "";
 }
 
-async function readVideoMetadata(filePath) {
+function metadataCachePath(videoId) {
+  return path.join(metadataDir(), `${videoId}.json`);
+}
+
+function extractYouTubeId(...values) {
+  const joined = values.filter(Boolean).join(" ");
+  const urlMatch = joined.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (urlMatch) return urlMatch[1];
+  const bracketMatch = joined.match(/[\[(_\s-]([A-Za-z0-9_-]{11})[\])_\s.-]/);
+  return bracketMatch?.[1] || "";
+}
+
+function metadataFromInfo(info = {}) {
+  return {
+    title: info.title || "",
+    description: info.description || "",
+    uploader: info.channel || info.uploader || "",
+    sourceUrl: info.webpage_url || info.original_url || "",
+    uploadedAt: normalizeUploadDate(info.upload_date || info.release_date || ""),
+    duration: info.duration_string || "",
+    youtubeId: info.id || extractYouTubeId(info.webpage_url, info.original_url)
+  };
+}
+
+async function readCachedMetadata(videoId) {
+  try {
+    return metadataFromInfo(JSON.parse(await fs.readFile(metadataCachePath(videoId), "utf8")));
+  } catch {
+    return {};
+  }
+}
+
+async function writeCachedMetadata(videoId, info) {
+  await fs.mkdir(metadataDir(), { recursive: true });
+  await fs.writeFile(metadataCachePath(videoId), JSON.stringify(info, null, 2));
+}
+
+async function fetchYouTubeMetadata(video) {
+  if (!METADATA_FETCH_ENABLED) throw new Error("Metadata fetching is disabled");
+  const youtubeId = video.youtubeId || extractYouTubeId(video.sourceUrl, video.path, video.title);
+  if (!youtubeId && !video.sourceUrl) {
+    throw new Error("Could not find a YouTube ID. Use filenames containing [YouTubeID] or enable MeTube info.json sidecars.");
+  }
+
+  const target = video.sourceUrl || `https://www.youtube.com/watch?v=${youtubeId}`;
+  const { stdout } = await execFileAsync("yt-dlp", [
+    "--dump-json",
+    "--skip-download",
+    "--no-playlist",
+    target
+  ], { timeout: 45000, maxBuffer: 1024 * 1024 * 8 });
+  const info = JSON.parse(stdout);
+  await writeCachedMetadata(video.id, info);
+  return metadataFromInfo(info);
+}
+
+async function readVideoMetadata(filePath, videoId, relativePath) {
   const parsed = path.parse(filePath);
   const infoJson = path.join(parsed.dir, `${parsed.name}.info.json`);
   const description = await readSidecarText([
@@ -589,13 +646,13 @@ async function readVideoMetadata(filePath) {
 
   try {
     const info = JSON.parse(await fs.readFile(infoJson, "utf8"));
-    metadata.title = info.title || "";
-    metadata.description = info.description || metadata.description;
-    metadata.uploader = info.channel || info.uploader || "";
-    metadata.sourceUrl = info.webpage_url || info.original_url || "";
-    metadata.uploadedAt = normalizeUploadDate(info.upload_date || info.release_date || "");
-    metadata.duration = info.duration_string || "";
+    Object.assign(metadata, metadataFromInfo(info));
   } catch {}
+
+  const cached = await readCachedMetadata(videoId);
+  Object.assign(metadata, Object.fromEntries(Object.entries(cached).filter(([, value]) => value)));
+  if (!metadata.description) metadata.description = description;
+  metadata.youtubeId = metadata.youtubeId || extractYouTubeId(metadata.sourceUrl, relativePath, parsed.name);
 
   return metadata;
 }
@@ -621,6 +678,10 @@ async function findThumbnail(filePath, relativePath) {
 
 function thumbnailDir() {
   return path.join(DATA_DIR, "thumbnails");
+}
+
+function metadataDir() {
+  return path.join(DATA_DIR, "metadata");
 }
 
 function generatedThumbnailPath(videoId) {
@@ -694,7 +755,7 @@ async function scanLibrary() {
     const channelName = pathParts.length > 1 ? pathParts[0] : "Uploads";
     const id = Buffer.from(relativePath).toString("base64url");
     const thumbnail = await findThumbnail(filePath, relativePath) || await generateThumbnail(filePath, id);
-    const metadata = await readVideoMetadata(filePath);
+    const metadata = await readVideoMetadata(filePath, id, relativePath);
 
     const video = {
       id,
@@ -710,6 +771,8 @@ async function scanLibrary() {
       sourceUrl: metadata.sourceUrl,
       uploadedAt: metadata.uploadedAt,
       duration: metadata.duration,
+      youtubeId: metadata.youtubeId,
+      hasDescription: Boolean(metadata.description),
       size: stats.size,
       modifiedAt: stats.mtime.toISOString()
     };
@@ -1040,6 +1103,21 @@ async function handleApi(req, res, url) {
       const payload = await readBody(req);
       saveWatchProgress(session.username, payload.videoId, payload.position, payload.duration);
       return sendJson(res, 200, { ok: true });
+    }
+  }
+
+  if (url.pathname.startsWith("/api/metadata/") && req.method === "POST") {
+    const id = safeDecode(url.pathname.slice("/api/metadata/".length));
+    const video = library.videos.find((item) => item.id === id);
+    if (!video) return sendJson(res, 404, { error: "Video not found" });
+
+    try {
+      await fetchYouTubeMetadata(video);
+      await scanLibrary();
+      const updated = library.videos.find((item) => item.id === id);
+      return sendJson(res, 200, { video: updated });
+    } catch (error) {
+      return sendJson(res, 500, { error: error.message });
     }
   }
 
