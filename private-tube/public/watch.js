@@ -50,7 +50,7 @@ function renderDescription(video) {
   videoDescription.hidden = false;
   videoDescription.innerHTML = lines.length ? lines.join("") : `
     <strong>No description saved yet</strong>
-    <p>PrivateTube can read MeTube .info.json/.description sidecars, or try fetching metadata from YouTube if the video ID is in the filename.</p>
+    <p>PrivateTube can read MeTube .info.json/.description sidecars, or try searching YouTube by this video's title and channel.</p>
   `;
 }
 

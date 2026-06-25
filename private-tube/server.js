@@ -610,11 +610,12 @@ async function writeCachedMetadata(videoId, info) {
 async function fetchYouTubeMetadata(video) {
   if (!METADATA_FETCH_ENABLED) throw new Error("Metadata fetching is disabled");
   const youtubeId = video.youtubeId || extractYouTubeId(video.sourceUrl, video.path, video.title);
-  if (!youtubeId && !video.sourceUrl) {
-    throw new Error("Could not find a YouTube ID. Use filenames containing [YouTubeID] or enable MeTube info.json sidecars.");
+  const searchQuery = `${video.title || ""} ${video.channel || ""}`.trim();
+  if (!youtubeId && !video.sourceUrl && !searchQuery) {
+    throw new Error("Could not identify this video. Enable MeTube info.json sidecars or keep the YouTube ID in filenames.");
   }
 
-  const target = video.sourceUrl || `https://www.youtube.com/watch?v=${youtubeId}`;
+  const target = video.sourceUrl || (youtubeId ? `https://www.youtube.com/watch?v=${youtubeId}` : `ytsearch1:${searchQuery}`);
   const { stdout } = await execFileAsync("yt-dlp", [
     "--dump-json",
     "--skip-download",
