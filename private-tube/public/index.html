@@ -16,25 +16,27 @@
   <body>
     <header class="topbar">
       <a class="brand" href="/" aria-label="PrivateTube home">
-        <span class="brand-mark">PT</span>
+        <span class="brand-mark" aria-hidden="true"></span>
         <span>PrivateTube</span>
       </a>
       <label class="search">
         <span class="sr-only">Search videos</span>
         <input id="searchInput" type="search" placeholder="Search your library">
       </label>
-      <button id="rescanButton" class="icon-button" type="button" title="Rescan library">⟳</button>
+      <button id="rescanButton" class="icon-button" type="button" title="Rescan library" aria-label="Rescan library">Refresh</button>
       <button id="logoutButton" class="icon-button" type="button" title="Log out">Exit</button>
     </header>
 
     <main class="shell">
       <aside class="sidebar">
-        <button class="nav-item active" type="button" data-filter="all">Home</button>
-        <button class="nav-item" type="button" data-filter="recent">Latest</button>
-        <button class="nav-item" type="button" data-filter="channels">Channels</button>
-        <button class="nav-item admin-only" type="button" data-filter="subscriptions">Subscriptions</button>
-        <button class="nav-item admin-only" type="button" data-filter="users">Users</button>
-        <button class="nav-item admin-only" type="button" data-filter="settings">Settings</button>
+        <nav class="side-nav" aria-label="Main navigation">
+          <button class="nav-item active" type="button" data-filter="all"><span class="nav-dot"></span><span>Home</span></button>
+          <button class="nav-item" type="button" data-filter="recent"><span class="nav-dot"></span><span>Latest</span></button>
+          <button class="nav-item" type="button" data-filter="channels"><span class="nav-dot"></span><span>Channels</span></button>
+          <button class="nav-item admin-only" type="button" data-filter="subscriptions"><span class="nav-dot"></span><span>Subscriptions</span></button>
+          <button class="nav-item admin-only" type="button" data-filter="users"><span class="nav-dot"></span><span>Users</span></button>
+          <button class="nav-item admin-only" type="button" data-filter="settings"><span class="nav-dot"></span><span>Settings</span></button>
+        </nav>
         <div class="add-panel">
           <form id="addForm">
             <label for="urlInput">Add a video</label>
@@ -65,6 +67,6 @@
     </main>
 
     <script src="/pwa.js" type="module"></script>
-    <script src="/app.js?v=20260625-setup-fix" type="module"></script>
+    <script src="/app.js?v=20260625-youtube-ui" type="module"></script>
   </body>
 </html>

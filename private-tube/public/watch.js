@@ -18,7 +18,7 @@ function isIOS() {
 
 function thumbnail(video) {
   if (video.thumbnail) return `<img src="${video.thumbnail}" alt="">`;
-  return `<div class="thumb-fallback"><span>Play</span></div>`;
+  return `<div class="thumb-fallback"><span></span></div>`;
 }
 
 function setCastStatus(message) {

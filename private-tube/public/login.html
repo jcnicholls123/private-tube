@@ -16,7 +16,11 @@
   <body>
     <section class="login-overlay">
       <form class="login-box" method="post" action="/form-login">
-        <h1>PrivateTube</h1>
+        <div class="login-brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>PrivateTube</span>
+        </div>
+        <h1>Sign in</h1>
         <input name="username" autocomplete="username" placeholder="Username" required>
         <input name="password" autocomplete="current-password" type="password" placeholder="Password" required>
         <button type="submit">Sign in</button>

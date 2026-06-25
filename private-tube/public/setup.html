@@ -15,8 +15,12 @@
   </head>
   <body>
     <section class="login-overlay">
-      <form class="login-box" method="post" action="/form-setup">
-        <h1>Set up PrivateTube</h1>
+      <form class="login-box setup-box" method="post" action="/form-setup">
+        <div class="login-brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>PrivateTube</span>
+        </div>
+        <h1>Set up your library</h1>
         <input name="username" autocomplete="username" placeholder="Admin username" value="admin" required>
         <input name="password" autocomplete="new-password" type="password" placeholder="Admin password" required>
         <input name="metubeUrl" type="url" placeholder="MeTube URL, e.g. http://10.69.24.3:30094">

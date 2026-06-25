@@ -14,9 +14,9 @@
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <header class="topbar">
+    <header class="topbar watch-topbar">
       <a class="brand" href="/" aria-label="PrivateTube home">
-        <span class="brand-mark">PT</span>
+        <span class="brand-mark" aria-hidden="true"></span>
         <span>PrivateTube</span>
       </a>
       <label class="search">
@@ -27,22 +27,26 @@
 
     <main class="watch-layout">
       <section class="player-panel">
-        <video id="player" controls autoplay playsinline x-webkit-airplay="allow"></video>
-        <div class="player-actions">
-          <button id="castButton" class="secondary-button" type="button" disabled>Cast</button>
-          <button id="airplayButton" class="secondary-button" type="button" hidden>AirPlay</button>
-          <span id="castStatus"></span>
+        <div class="player-frame">
+          <video id="player" controls autoplay playsinline x-webkit-airplay="allow"></video>
         </div>
         <h1 id="videoTitle"></h1>
-        <a id="channelLink" class="channel-link" href="/"></a>
+        <div class="watch-meta">
+          <a id="channelLink" class="channel-link" href="/"></a>
+          <div class="player-actions">
+            <button id="castButton" class="secondary-button" type="button" disabled>Cast</button>
+            <button id="airplayButton" class="secondary-button" type="button" hidden>AirPlay</button>
+          </div>
+        </div>
+        <p id="castStatus" class="cast-status"></p>
       </section>
-      <aside>
+      <aside class="up-next">
         <h2>Up next</h2>
         <div id="relatedGrid" class="related-list"></div>
       </aside>
     </main>
 
     <script src="/pwa.js" type="module"></script>
-    <script src="/watch.js" type="module"></script>
+    <script src="/watch.js?v=20260625-youtube-ui" type="module"></script>
   </body>
 </html>
