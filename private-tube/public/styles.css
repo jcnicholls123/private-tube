@@ -776,8 +776,89 @@ button {
   gap: 34px 18px;
 }
 
+.channel-grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 18px;
+}
+
 .video-card {
   min-width: 0;
+}
+
+.channel-card {
+  min-width: 0;
+}
+
+.channel-card-button {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  min-height: 106px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.channel-card-button:hover {
+  border-color: rgba(255, 0, 51, 0.45);
+  background: var(--surface-2);
+}
+
+.channel-card-thumb {
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 86px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.channel-card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.channel-avatar {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.channel-card-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.channel-card-copy strong,
+.channel-card-copy span,
+.channel-card-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-card-copy strong {
+  font-size: 17px;
+}
+
+.channel-card-copy span,
+.channel-card-copy small {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .thumb {

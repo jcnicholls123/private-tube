@@ -382,6 +382,18 @@ function recentDownloadEvents() {
     FROM download_events ORDER BY updated_at DESC LIMIT 12`);
 }
 
+function channelFromSubscription(subscription) {
+  return {
+    id: slugify(subscription.name),
+    name: subscription.name,
+    count: 0,
+    latestAt: subscription.lastRunAt || subscription.createdAt,
+    thumbnail: null,
+    subscribed: true,
+    lastStatus: subscription.lastStatus || "new"
+  };
+}
+
 function saveWatchProgress(username, videoId, position, duration) {
   const now = new Date().toISOString();
   if (!username || !videoId) return;
@@ -782,15 +794,30 @@ async function scanLibrary() {
 
     const channel = channelMap.get(video.channelId) || {
       id: video.channelId,
-      name: channelName,
+      name: video.channel,
       count: 0,
       latestAt: video.modifiedAt,
-      thumbnail
+      thumbnail,
+      subscribed: false
     };
+    if (channel.name === "Uploads" && video.channel !== "Uploads") channel.name = video.channel;
     channel.count += 1;
     if (video.modifiedAt > channel.latestAt) channel.latestAt = video.modifiedAt;
     if (!channel.thumbnail && thumbnail) channel.thumbnail = thumbnail;
     channelMap.set(video.channelId, channel);
+  }
+
+  for (const subscription of getSubscriptions()) {
+    const subscriptionChannel = channelFromSubscription(subscription);
+    const existing = channelMap.get(subscriptionChannel.id);
+    if (existing) {
+      existing.name = subscriptionChannel.name;
+      existing.subscribed = true;
+      existing.lastStatus = subscriptionChannel.lastStatus;
+      if (!existing.latestAt && subscriptionChannel.latestAt) existing.latestAt = subscriptionChannel.latestAt;
+    } else {
+      channelMap.set(subscriptionChannel.id, subscriptionChannel);
+    }
   }
 
   videos.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));

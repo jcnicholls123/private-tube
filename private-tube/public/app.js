@@ -265,6 +265,12 @@ function videoMeta(video) {
 
 function renderVideos(videos) {
   grid.hidden = state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
+  if (state.filter === "channels") {
+    renderChannelDirectory();
+    return;
+  }
+
+  grid.classList.remove("channel-grid");
   grid.innerHTML = videos.map((video) => `
     <article class="video-card">
       <a class="thumb" href="${video.watchUrl}">${thumbnail(video)}</a>
@@ -273,6 +279,32 @@ function renderVideos(videos) {
         <button class="channel-name" type="button" data-channel="${video.channelId}">${video.channel}</button>
         <p>${videoMeta(video)}</p>
       </div>
+    </article>
+  `).join("");
+
+  grid.querySelectorAll("[data-channel]").forEach((button) => {
+    button.addEventListener("click", () => selectFilter("channel", button.dataset.channel));
+  });
+}
+
+function channelThumb(channel) {
+  if (channel.thumbnail) return `<img src="${channel.thumbnail}" alt="">`;
+  return `<span class="channel-avatar">${channel.name.slice(0, 1).toUpperCase()}</span>`;
+}
+
+function renderChannelDirectory() {
+  grid.hidden = false;
+  grid.classList.add("channel-grid");
+  grid.innerHTML = state.library.channels.map((channel) => `
+    <article class="channel-card">
+      <button type="button" data-channel="${channel.id}" class="channel-card-button">
+        <span class="channel-card-thumb">${channelThumb(channel)}</span>
+        <span class="channel-card-copy">
+          <strong>${channel.name}</strong>
+          <span>${channel.count} video${channel.count === 1 ? "" : "s"}${channel.subscribed ? " · subscribed" : ""}</span>
+          ${channel.lastStatus && channel.count === 0 ? `<small>${channel.lastStatus}</small>` : ""}
+        </span>
+      </button>
     </article>
   `).join("");
 
@@ -586,7 +618,7 @@ function render() {
   renderSubscriptions();
   renderUsers();
   renderSettings();
-  emptyState.hidden = videos.length > 0 || state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
+  emptyState.hidden = videos.length > 0 || (state.filter === "channels" && state.library.channels.length > 0) || state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
 }
 
 async function loadAdminData() {
