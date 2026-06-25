@@ -375,6 +375,29 @@ async function readBody(req) {
   });
 }
 
+async function readFormBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 1024 * 64) {
+        reject(new Error("Request body too large"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => resolve(Object.fromEntries(new URLSearchParams(body))));
+    req.on("error", reject);
+  });
+}
+
+function redirect(res, location) {
+  res.writeHead(303, {
+    location,
+    "cache-control": "no-store"
+  });
+  res.end();
+}
+
 function requireAuth(req, res) {
   const session = getSession(req);
   if (session) return session;
@@ -877,10 +900,30 @@ async function handleApi(req, res, url) {
   sendJson(res, 404, { error: "API endpoint not found" });
 }
 
+async function handleFormLogin(req, res) {
+  try {
+    const payload = await readFormBody(req);
+    const user = getUser(payload.username);
+    if (!user || !verifyPassword(payload.password || "", user.passwordHash)) {
+      return redirect(res, "/login.html?error=1");
+    }
+    const token = crypto.randomBytes(32).toString("base64url");
+    const session = { username: user.username, role: user.role || "viewer" };
+    sessions.set(token, session);
+    setSessionCookie(res, token);
+    return redirect(res, "/");
+  } catch (error) {
+    console.error("Form login failed:", error);
+    return redirect(res, "/login.html?error=1");
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   try {
+    if (url.pathname === "/form-login" && req.method === "POST") return await handleFormLogin(req, res);
+
     if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url);
 
     if (url.pathname.startsWith("/media/")) {

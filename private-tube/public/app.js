@@ -530,9 +530,7 @@ setupForm?.addEventListener("submit", async (event) => {
 });
 
 setupLoginButton?.addEventListener("click", async () => {
-  state.session = await api("/api/session");
-  hideSetup();
-  showLogin();
+  location.href = "/login.html";
 });
 
 logoutButton?.addEventListener("click", async () => {
