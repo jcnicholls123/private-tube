@@ -29,13 +29,13 @@ const logoutButton = document.querySelector("#logoutButton");
 const menuButton = document.querySelector("#menuButton");
 const appMenu = document.querySelector("#appMenu");
 const menuBackdrop = document.querySelector("#menuBackdrop");
-const themeButton = document.querySelector("#themeButton");
 const downloadStatus = document.querySelector("#downloadStatus");
 const downloadStatusText = document.querySelector("#downloadStatusText");
-const downloadStatusBar = document.querySelector("#downloadStatusBar");
+const downloadActivityList = document.querySelector("#downloadActivityList");
 const continueSection = document.querySelector("#continueSection");
 const continueGrid = document.querySelector("#continueGrid");
 const continueMeta = document.querySelector("#continueMeta");
+const toastStack = document.querySelector("#toastStack");
 const initialParams = new URLSearchParams(location.search);
 
 state.query = initialParams.get("q") || "";
@@ -50,11 +50,9 @@ function isAdmin() {
 function applyTheme(theme = localStorage.getItem("pt-theme") || "dark") {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem("pt-theme", theme);
-  if (themeButton) themeButton.textContent = theme === "dark" ? "Day mode" : "Night mode";
-}
-
-function toggleTheme() {
-  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.themeChoice === theme);
+  });
 }
 
 function closeMenu() {
@@ -72,6 +70,30 @@ function openMenu() {
 function toggleMenu() {
   if (appMenu.hasAttribute("hidden")) openMenu();
   else closeMenu();
+}
+
+function notify(message, tone = "info") {
+  if (!toastStack) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${tone}`;
+  toast.textContent = message;
+  toastStack.appendChild(toast);
+  window.setTimeout(() => toast.remove(), 4200);
+
+  if (localStorage.getItem("pt-notifications") === "on" && "Notification" in window && Notification.permission === "granted") {
+    new Notification("PrivateTube", { body: message });
+  }
+}
+
+async function enableNotifications() {
+  if (!("Notification" in window)) {
+    notify("Browser notifications are not supported here", "warn");
+    return;
+  }
+  const permission = await Notification.requestPermission();
+  localStorage.setItem("pt-notifications", permission === "granted" ? "on" : "off");
+  notify(permission === "granted" ? "Notifications enabled" : "Notifications not enabled", permission === "granted" ? "success" : "warn");
+  render();
 }
 
 async function api(path, options = {}) {
@@ -124,6 +146,17 @@ function formatTime(seconds) {
   const minutes = Math.floor(total / 60);
   const rest = String(total % 60).padStart(2, "0");
   return `${minutes}:${rest}`;
+}
+
+function formatRelative(value) {
+  if (!value) return "just now";
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return formatDate(value);
 }
 
 function thumbnail(video) {
@@ -255,14 +288,22 @@ function renderContinue() {
 }
 
 function renderDownloadStatus() {
-  const latest = state.downloads[0];
-  downloadStatus.hidden = !latest;
-  if (!latest) return;
+  const items = state.downloads.slice(0, 4);
+  downloadStatus.hidden = items.length === 0;
+  if (!items.length) return;
 
-  const label = latest.status === "queued" ? "Queued in MeTube" : latest.status === "failed" ? "Failed" : latest.status;
-  downloadStatusText.textContent = `${label} - ${qualityLabel(latest.quality)}`;
-  downloadStatusBar.style.width = latest.status === "failed" ? "100%" : "72%";
-  downloadStatus.classList.toggle("failed", latest.status === "failed");
+  const failed = items.some((item) => item.status === "failed");
+  downloadStatus.classList.toggle("failed", failed);
+  downloadStatusText.textContent = `${items.length} recent MeTube request${items.length === 1 ? "" : "s"}`;
+  downloadActivityList.innerHTML = items.map((item) => {
+    const label = item.status === "queued" ? "Sent to MeTube" : item.status === "failed" ? "Failed" : item.status;
+    return `
+      <article class="download-activity ${item.status}">
+        <strong>${label}</strong>
+        <span>${qualityLabel(item.quality)} &middot; ${item.source} &middot; ${formatRelative(item.updatedAt)}</span>
+      </article>
+    `;
+  }).join("");
 }
 
 function renderTitle(videos) {
@@ -414,16 +455,39 @@ function renderSettings() {
   adminPanel.hidden = false;
 
   adminPanel.innerHTML = `
-    <form id="settingsForm" class="settings-form settings-form-wide">
-      <input name="metubeUrl" type="url" placeholder="MeTube URL" value="${state.settings.metubeUrl || ""}">
-      <input name="publicUrl" type="url" placeholder="Chromecast public URL, blank for auto" value="${state.settings.publicUrl || ""}">
+    <div class="settings-grid">
+      <section class="settings-card">
+        <h2>Appearance</h2>
+        <p>Choose how PrivateTube looks on this browser.</p>
+        <div class="segmented">
+          <button type="button" data-theme-choice="dark">Night</button>
+          <button type="button" data-theme-choice="light">Day</button>
+        </div>
+      </section>
+      <section class="settings-card">
+        <h2>Notifications</h2>
+        <p>Use in-app toasts for actions. Browser notifications are optional and stay on this device.</p>
+        <button id="notificationButton" class="secondary-button" type="button">Enable browser notifications</button>
+      </section>
+    </div>
+    <form id="settingsForm" class="settings-form settings-form-wide cast-settings-form">
+      <label>
+        <span>MeTube URL</span>
+        <input name="metubeUrl" type="url" placeholder="http://10.69.24.3:30094" value="${state.settings.metubeUrl || ""}">
+      </label>
+      <label>
+        <span>Chromecast public URL</span>
+        <input name="publicUrl" type="url" placeholder="${location.origin}" value="${state.settings.publicUrl || ""}">
+      </label>
       <button type="submit">Save settings</button>
     </form>
     <div class="settings-list">
       <article class="settings-row">
         <div>
-          <strong>Chromecast</strong>
-          <p>Blank public URL uses the address you opened PrivateTube with. Set it only if Chromecast needs a different LAN URL.</p>
+          <strong>Cast settings</strong>
+          <p>Detected app URL: ${location.origin}</p>
+          <p>Chromecast URL in use: ${state.settings.publicUrl || location.origin}</p>
+          <p>Use your TrueNAS LAN URL here, not localhost or 127.0.0.1. Example: http://10.69.24.3:3020</p>
         </div>
       </article>
       <article class="settings-row">
@@ -444,17 +508,30 @@ function renderSettings() {
     </div>
   `;
 
+  applyTheme();
+
+  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+    button.addEventListener("click", () => {
+      applyTheme(button.dataset.themeChoice);
+      notify(`${button.textContent} mode enabled`, "success");
+    });
+  });
+
+  document.querySelector("#notificationButton").addEventListener("click", enableNotifications);
+
   document.querySelector("#settingsForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.currentTarget));
     state.settings = await api("/api/settings", { method: "POST", body: JSON.stringify(data) });
     state.config = await api("/api/config");
     renderAddPanel();
+    notify("Settings saved", "success");
     render();
   });
 
   document.querySelector("#regenerateThumbsButton").addEventListener("click", async () => {
     await api("/api/thumbnails/regenerate", { method: "POST", timeoutMs: 120000 });
+    notify("Thumbnail regeneration started", "success");
     await loadLibrary();
   });
 }
@@ -544,8 +621,10 @@ async function boot() {
   }
   await loadLibrary();
   window.setInterval(async () => {
-    await loadDownloads();
-    renderDownloadStatus();
+    try {
+      await loadDownloads();
+      renderDownloadStatus();
+    } catch {}
   }, 10000);
 }
 
@@ -558,7 +637,7 @@ document.querySelectorAll("[data-menu-filter]").forEach((button) => {
 });
 
 menuBackdrop.addEventListener("click", closeMenu);
-themeButton.addEventListener("click", toggleTheme);
+menuButton.addEventListener("click", toggleMenu);
 
 searchInput.addEventListener("input", () => {
   state.query = searchInput.value;
@@ -572,10 +651,11 @@ qualitySelect.addEventListener("change", renderQualityInfo);
 rescanButton.addEventListener("click", async () => {
   rescanButton.disabled = true;
   await api("/api/rescan", { method: "POST" });
-  await loadLibrary();
-  rescanButton.disabled = false;
-  closeMenu();
-});
+    await loadLibrary();
+    rescanButton.disabled = false;
+    closeMenu();
+    notify("Library rescanned", "success");
+  });
 
 addForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -587,10 +667,12 @@ addForm.addEventListener("submit", async (event) => {
     });
     addStatus.textContent = result.ok ? "Queued in MeTube" : "Could not add video";
     if (result.ok) urlInput.value = "";
+    notify(result.ok ? "Sent to MeTube" : "MeTube could not queue that", result.ok ? "success" : "warn");
     await loadDownloads();
     renderDownloadStatus();
   } catch (error) {
     addStatus.textContent = error.message;
+    notify(error.message, "warn");
   }
 });
 

@@ -15,7 +15,7 @@
   </head>
   <body>
     <header class="topbar">
-      <button id="menuButton" class="menu-button" type="button" aria-label="Open menu" aria-expanded="false" onclick="window.ptToggleMenu && window.ptToggleMenu()">
+      <button id="menuButton" class="menu-button" type="button" aria-label="Open menu" aria-expanded="false">
         <span></span>
         <span></span>
         <span></span>
@@ -34,17 +34,28 @@
     <aside id="appMenu" class="app-menu" hidden aria-label="PrivateTube menu">
       <div class="menu-head">
         <span class="brand-mark" aria-hidden="true"></span>
-        <strong>PrivateTube</strong>
+        <div>
+          <strong>PrivateTube</strong>
+          <p>Your video library</p>
+        </div>
       </div>
-      <button class="menu-item" type="button" data-menu-filter="all">Home</button>
-      <button class="menu-item" type="button" data-menu-filter="recent">Latest</button>
-      <button class="menu-item" type="button" data-menu-filter="channels">Channel management</button>
-      <button class="menu-item admin-only" type="button" data-menu-filter="subscriptions">Subscriptions</button>
-      <button class="menu-item admin-only" type="button" data-menu-filter="users">Users</button>
-      <button class="menu-item admin-only" type="button" data-menu-filter="settings">Settings</button>
-      <button id="rescanButton" class="menu-item" type="button">Rescan library</button>
-      <button id="themeButton" class="menu-item" type="button">Day mode</button>
-      <button id="logoutButton" class="menu-item danger" type="button">Log out</button>
+      <div class="menu-section">
+        <span>Browse</span>
+        <button class="menu-item" type="button" data-menu-filter="all"><b>Home</b><small>All videos</small></button>
+        <button class="menu-item" type="button" data-menu-filter="recent"><b>Latest</b><small>Newest downloads</small></button>
+        <button class="menu-item" type="button" data-menu-filter="channels"><b>Channels</b><small>Browse channels</small></button>
+      </div>
+      <div class="menu-section admin-only">
+        <span>Manage</span>
+        <button class="menu-item" type="button" data-menu-filter="subscriptions"><b>Subscriptions</b><small>Auto downloads</small></button>
+        <button class="menu-item" type="button" data-menu-filter="users"><b>Users</b><small>Local accounts</small></button>
+        <button class="menu-item" type="button" data-menu-filter="settings"><b>Settings</b><small>Cast, theme, notifications</small></button>
+      </div>
+      <div class="menu-section">
+        <span>Actions</span>
+        <button id="rescanButton" class="menu-item" type="button"><b>Rescan library</b><small>Refresh metadata</small></button>
+        <button id="logoutButton" class="menu-item danger" type="button"><b>Log out</b><small>End this session</small></button>
+      </div>
     </aside>
 
     <main class="shell">
@@ -68,10 +79,10 @@
         </div>
         <section id="downloadStatus" class="download-status" hidden>
           <div>
-            <strong>Downloads</strong>
-            <span id="downloadStatusText">Idle</span>
+            <strong>Download activity</strong>
+            <span id="downloadStatusText">No recent downloads</span>
           </div>
-          <div class="status-track"><span id="downloadStatusBar"></span></div>
+          <div id="downloadActivityList" class="download-activity-list"></div>
         </section>
       </aside>
 
@@ -96,19 +107,9 @@
         </div>
       </section>
     </main>
+    <div id="toastStack" class="toast-stack" aria-live="polite"></div>
 
     <script src="/pwa.js" type="module"></script>
-    <script>
-      window.ptToggleMenu = function () {
-        const menu = document.querySelector("#appMenu");
-        const backdrop = document.querySelector("#menuBackdrop");
-        const button = document.querySelector("#menuButton");
-        const open = menu.hasAttribute("hidden");
-        menu.toggleAttribute("hidden", !open);
-        backdrop.toggleAttribute("hidden", !open);
-        button.setAttribute("aria-expanded", String(open));
-      };
-    </script>
     <script src="/app.js?v=20260625-menu-progress" type="module"></script>
   </body>
 </html>

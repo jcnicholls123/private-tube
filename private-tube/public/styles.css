@@ -125,9 +125,9 @@ button {
   z-index: 19;
   display: grid;
   align-content: start;
-  gap: 4px;
+  gap: 14px;
   width: min(320px, calc(100vw - 36px));
-  padding: 16px;
+  padding: 18px;
   border-right: 1px solid var(--line);
   background: var(--bg);
   box-shadow: var(--shadow);
@@ -138,18 +138,49 @@ button {
   align-items: center;
   gap: 10px;
   min-height: 48px;
-  margin-bottom: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.menu-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.menu-section {
+  display: grid;
+  gap: 4px;
+}
+
+.menu-section > span {
+  margin: 0 0 3px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .menu-item {
-  min-height: 44px;
+  display: grid;
+  gap: 3px;
+  min-height: 54px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   background: transparent;
   color: var(--text);
   text-align: left;
-  padding: 0 14px;
+  padding: 9px 12px;
   cursor: pointer;
+}
+
+.menu-item b {
+  font-size: 14px;
+}
+
+.menu-item small {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .menu-item:hover {
@@ -442,24 +473,22 @@ button {
   font-size: 12px;
 }
 
-.status-track {
-  overflow: hidden;
-  height: 6px;
-  border-radius: 999px;
+.download-activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.download-activity {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  border-radius: 10px;
   background: var(--surface-2);
+  border-left: 3px solid var(--accent);
 }
 
-.status-track span {
-  display: block;
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
-  transition: width 250ms ease;
-}
-
-.download-status.failed .status-track span {
-  background: #d93025;
+.download-activity.failed {
+  border-left-color: #d93025;
 }
 
 .content {
@@ -719,6 +748,73 @@ button {
   background: var(--surface);
 }
 
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.settings-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.settings-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.segmented button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.segmented button.active {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.settings-form label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.settings-form label span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.cast-settings-form {
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) 140px;
+}
+
 .settings-form-wide {
   grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) 140px;
 }
@@ -776,6 +872,33 @@ button {
 .row-actions {
   display: flex;
   gap: 8px;
+}
+
+.toast-stack {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 30;
+  display: grid;
+  gap: 10px;
+  width: min(340px, calc(100vw - 28px));
+}
+
+.toast {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.toast.success {
+  border-left: 4px solid #21a366;
+}
+
+.toast.warn {
+  border-left: 4px solid #fbbc04;
 }
 
 .watch-layout {
@@ -963,6 +1086,10 @@ button {
   .settings-form {
     grid-template-columns: 1fr 1fr;
   }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 620px) {
@@ -1002,6 +1129,7 @@ button {
 
   .settings-form,
   .settings-form-wide,
+  .cast-settings-form,
   .settings-row {
     grid-template-columns: 1fr;
   }
