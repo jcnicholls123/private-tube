@@ -47,10 +47,22 @@ function isAdmin() {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "content-type": "application/json", ...(options.headers || {}) },
-    ...options
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs || 15000);
+  let response;
+
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers: { "content-type": "application/json", ...(options.headers || {}) },
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("Request timed out. Check the container logs.");
+    throw new Error("Could not reach PrivateTube. Check the container logs.");
+  } finally {
+    window.clearTimeout(timeout);
+  }
 
   if (response.status === 401) {
     if (!state.session.setupRequired) showLogin();
@@ -472,6 +484,8 @@ loginForm.addEventListener("submit", async (event) => {
 
 setupForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const submitButton = setupForm.querySelector("button");
+  submitButton.disabled = true;
   setupStatus.textContent = "Creating admin...";
   try {
     await api("/api/setup", {
@@ -493,6 +507,8 @@ setupForm.addEventListener("submit", async (event) => {
       return;
     }
     setupStatus.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
   }
 });
 

@@ -673,24 +673,30 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === "/api/setup" && req.method === "POST") {
-    if (!setupRequired()) return sendJson(res, 409, { error: "Setup is already complete" });
-    const payload = await readBody(req);
-    if (!payload.username || !payload.password) {
-      return sendJson(res, 400, { error: "Username and password are required" });
+    try {
+      if (!setupRequired()) return sendJson(res, 409, { error: "Setup is already complete" });
+      const payload = await readBody(req);
+      if (!payload.username || !payload.password) {
+        return sendJson(res, 400, { error: "Username and password are required" });
+      }
+      console.log(`Creating initial admin user '${payload.username}'`);
+      upsertUser({
+        username: payload.username,
+        role: "admin",
+        passwordHash: hashPassword(payload.password),
+        createdAt: new Date().toISOString()
+      });
+      if (payload.metubeUrl) setAppSetting("metube_url", String(payload.metubeUrl).replace(/\/$/, ""));
+      if (payload.publicUrl) setAppSetting("public_url", String(payload.publicUrl).replace(/\/$/, ""));
+      const token = crypto.randomBytes(32).toString("base64url");
+      const session = { username: payload.username, role: "admin" };
+      sessions.set(token, session);
+      setSessionCookie(res, token);
+      return sendJson(res, 201, { ok: true, user: session });
+    } catch (error) {
+      console.error("Initial setup failed:", error);
+      return sendJson(res, 500, { error: `Initial setup failed: ${error.message}` });
     }
-    upsertUser({
-      username: payload.username,
-      role: "admin",
-      passwordHash: hashPassword(payload.password),
-      createdAt: new Date().toISOString()
-    });
-    if (payload.metubeUrl) setAppSetting("metube_url", String(payload.metubeUrl).replace(/\/$/, ""));
-    if (payload.publicUrl) setAppSetting("public_url", String(payload.publicUrl).replace(/\/$/, ""));
-    const token = crypto.randomBytes(32).toString("base64url");
-    const session = { username: payload.username, role: "admin" };
-    sessions.set(token, session);
-    setSessionCookie(res, token);
-    return sendJson(res, 201, { ok: true, user: session });
   }
 
   if (url.pathname === "/api/login" && req.method === "POST") {
