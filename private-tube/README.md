@@ -49,23 +49,24 @@ environment:
   METUBE_URL: http://TRUENAS-IP:30094
 ```
 
+## First Run
+
+PrivateTube creates the first admin account in the browser. Deploy the app, open it, and complete the setup screen.
+
+No admin password or cast secret is required in YAML.
+
 ## Users and Subscriptions
 
-Set an initial admin account:
+Users are managed from the in-app Users page. Emergency password reset is still available with env vars:
 
 ```yaml
 environment:
   ADMIN_USERNAME: admin
-  ADMIN_PASSWORD: change-me
-  RESET_ADMIN_PASSWORD: "false"
-  CAST_SECRET: change-this-too
-  RESET_CAST_SECRET: "false"
-  AUTH_ENABLED: "true"
+  ADMIN_PASSWORD: temporary-password
+  RESET_ADMIN_PASSWORD: "true"
 ```
 
-If the stored admin password needs resetting, set `RESET_ADMIN_PASSWORD` to `"true"` for one restart, then change it back to `"false"`.
-
-`CAST_SECRET` is saved into SQLite on first startup. To rotate it later, set `RESET_CAST_SECRET` to `"true"` for one restart.
+Set `RESET_ADMIN_PASSWORD` back to `"false"` after logging in.
 
 Mount `/data` so local users and subscriptions survive container updates:
 
@@ -74,7 +75,7 @@ volumes:
   - /mnt/Media/apps/private-tube:/data
 ```
 
-PrivateTube stores users, password hashes, subscriptions, and app secrets in `/data/private-tube.sqlite`.
+PrivateTube stores users, password hashes, subscriptions, settings, and app secrets in `/data/private-tube.sqlite`.
 
 Channel subscriptions periodically submit saved channel or playlist URLs to MeTube.
 
@@ -82,11 +83,6 @@ Retention cleanup only deletes files when `ALLOW_DELETE=true` and the media fold
 
 ## Chromecast
 
-Set `PUBLIC_URL` to the LAN URL Chromecast devices can reach:
-
-```yaml
-environment:
-  PUBLIC_URL: http://TRUENAS-IP:3020
-```
+By default, PrivateTube uses the address you opened it with. If Chromecast needs a different LAN URL, set it in the in-app Settings page.
 
 Use WebM or MP4 files for best playback support.

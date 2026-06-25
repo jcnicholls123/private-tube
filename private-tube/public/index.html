@@ -31,6 +31,18 @@
       </form>
     </section>
 
+    <section id="setupOverlay" class="login-overlay" hidden>
+      <form id="setupForm" class="login-box">
+        <h1>Set up PrivateTube</h1>
+        <input id="setupUsername" autocomplete="username" placeholder="Admin username" value="admin">
+        <input id="setupPassword" autocomplete="new-password" type="password" placeholder="Admin password">
+        <input id="setupMetubeUrl" type="url" placeholder="MeTube URL, e.g. http://10.69.24.3:30094">
+        <input id="setupPublicUrl" type="url" placeholder="Cast URL, blank for auto">
+        <button type="submit">Create admin</button>
+        <p id="setupStatus"></p>
+      </form>
+    </section>
+
     <main class="shell">
       <aside class="sidebar">
         <button class="nav-item active" type="button" data-filter="all">Home</button>
@@ -38,6 +50,7 @@
         <button class="nav-item" type="button" data-filter="channels">Channels</button>
         <button class="nav-item admin-only" type="button" data-filter="subscriptions">Subscriptions</button>
         <button class="nav-item admin-only" type="button" data-filter="users">Users</button>
+        <button class="nav-item admin-only" type="button" data-filter="settings">Settings</button>
         <div class="add-panel">
           <form id="addForm">
             <label for="urlInput">Add a video</label>

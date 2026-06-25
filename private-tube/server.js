@@ -8,13 +8,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3020);
 const MEDIA_DIR = path.resolve(process.env.MEDIA_DIR || path.join(__dirname, "media"));
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, "data"));
-const METUBE_URL = (process.env.METUBE_URL || "").replace(/\/$/, "");
-const PUBLIC_URL = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
+const BOOTSTRAP_METUBE_URL = (process.env.METUBE_URL || "").replace(/\/$/, "");
+const BOOTSTRAP_PUBLIC_URL = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
 const SCAN_INTERVAL_MS = Number(process.env.SCAN_INTERVAL_MS || 5 * 60 * 1000);
 const CHANNEL_CHECK_INTERVAL_MS = Number(process.env.CHANNEL_CHECK_INTERVAL_MS || 15 * 60 * 1000);
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
-const AUTH_ENABLED = process.env.AUTH_ENABLED !== "false" && Boolean(ADMIN_USERNAME && ADMIN_PASSWORD);
+const AUTH_ENABLED = process.env.AUTH_ENABLED !== "false";
 const RESET_ADMIN_PASSWORD = process.env.RESET_ADMIN_PASSWORD === "true";
 const ALLOW_DELETE = process.env.ALLOW_DELETE === "true";
 
@@ -59,7 +59,7 @@ function requestOrigin(req) {
 }
 
 function absoluteUrl(req, relativeUrl) {
-  return `${PUBLIC_URL || requestOrigin(req)}${relativeUrl}`;
+  return `${getAppSetting("public_url") || requestOrigin(req)}${relativeUrl}`;
 }
 
 function mediaContentType(filePath) {
@@ -192,6 +192,12 @@ function initSchema() {
     created_at TEXT NOT NULL,
     updated_at TEXT
   )`);
+  run(`CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT
+  )`);
 }
 
 function getSecret(key) {
@@ -203,6 +209,24 @@ function setSecret(key, value) {
   run(`INSERT INTO secrets (key, value, created_at, updated_at)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, [key, value, now, now]);
+}
+
+function getAppSetting(key) {
+  return get("SELECT value FROM settings WHERE key = ?", [key])?.value || "";
+}
+
+function setAppSetting(key, value) {
+  const now = new Date().toISOString();
+  run(`INSERT INTO settings (key, value, created_at, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, [key, value || "", now, now]);
+}
+
+function appSettings() {
+  return {
+    metubeUrl: getAppSetting("metube_url"),
+    publicUrl: getAppSetting("public_url")
+  };
 }
 
 function getUsers() {
@@ -228,6 +252,10 @@ function upsertUser(user) {
 
 function deleteUser(username) {
   run("DELETE FROM users WHERE username = ?", [username]);
+}
+
+function setupRequired() {
+  return AUTH_ENABLED && getUsers().length === 0;
 }
 
 function getSubscriptions() {
@@ -296,7 +324,10 @@ async function loadStore() {
   initSchema();
   await migrateLegacyJson();
 
-  if (AUTH_ENABLED) {
+  if (BOOTSTRAP_METUBE_URL && !getAppSetting("metube_url")) setAppSetting("metube_url", BOOTSTRAP_METUBE_URL);
+  if (BOOTSTRAP_PUBLIC_URL && !getAppSetting("public_url")) setAppSetting("public_url", BOOTSTRAP_PUBLIC_URL);
+
+  if (AUTH_ENABLED && ADMIN_USERNAME && ADMIN_PASSWORD) {
     const adminUser = getUser(ADMIN_USERNAME);
     if (!adminUser) {
       upsertUser({
@@ -488,8 +519,9 @@ function qualityPayload(quality) {
 }
 
 async function addToMetube(url, quality = "best") {
-  if (!METUBE_URL) throw new Error("METUBE_URL is not configured");
-  const response = await fetch(`${METUBE_URL}/add`, {
+  const metubeUrl = getAppSetting("metube_url");
+  if (!metubeUrl) throw new Error("MeTube URL is not configured");
+  const response = await fetch(`${metubeUrl}/add`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ url, ...qualityPayload(quality) })
@@ -498,7 +530,7 @@ async function addToMetube(url, quality = "best") {
 }
 
 async function runSubscription(subscription, force = false) {
-  if (!METUBE_URL) return;
+  if (!getAppSetting("metube_url")) return;
   const now = Date.now();
   const intervalMs = Math.max(1, Number(subscription.intervalHours || 24)) * 60 * 60 * 1000;
   if (!force && subscription.lastRunAt && now - new Date(subscription.lastRunAt).getTime() < intervalMs) {
@@ -635,8 +667,30 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, {
       authenticated: Boolean(session),
       authEnabled: AUTH_ENABLED,
+      setupRequired: setupRequired(),
       user: session
     });
+  }
+
+  if (url.pathname === "/api/setup" && req.method === "POST") {
+    if (!setupRequired()) return sendJson(res, 409, { error: "Setup is already complete" });
+    const payload = await readBody(req);
+    if (!payload.username || !payload.password) {
+      return sendJson(res, 400, { error: "Username and password are required" });
+    }
+    upsertUser({
+      username: payload.username,
+      role: "admin",
+      passwordHash: hashPassword(payload.password),
+      createdAt: new Date().toISOString()
+    });
+    if (payload.metubeUrl) setAppSetting("metube_url", String(payload.metubeUrl).replace(/\/$/, ""));
+    if (payload.publicUrl) setAppSetting("public_url", String(payload.publicUrl).replace(/\/$/, ""));
+    const token = crypto.randomBytes(32).toString("base64url");
+    const session = { username: payload.username, role: "admin" };
+    sessions.set(token, session);
+    setSessionCookie(res, token);
+    return sendJson(res, 201, { ok: true, user: session });
   }
 
   if (url.pathname === "/api/login" && req.method === "POST") {
@@ -664,15 +718,31 @@ async function handleApi(req, res, url) {
   if (!session) return;
 
   if (url.pathname === "/api/config") {
+    const settings = appSettings();
     return sendJson(res, 200, {
       authEnabled: AUTH_ENABLED,
-      metubeEnabled: Boolean(METUBE_URL),
-      metubeUrl: METUBE_URL,
+      setupRequired: setupRequired(),
+      metubeEnabled: Boolean(settings.metubeUrl),
+      metubeUrl: settings.metubeUrl,
+      publicUrl: settings.publicUrl,
       allowDelete: ALLOW_DELETE,
       database: "sqlite",
       qualityPresets: QUALITY_PRESETS,
       user: session
     });
+  }
+
+  if (url.pathname === "/api/settings") {
+    if (!requireAdmin(req, res)) return;
+
+    if (req.method === "GET") return sendJson(res, 200, appSettings());
+
+    if (req.method === "POST") {
+      const payload = await readBody(req);
+      setAppSetting("metube_url", String(payload.metubeUrl || "").replace(/\/$/, ""));
+      setAppSetting("public_url", String(payload.publicUrl || "").replace(/\/$/, ""));
+      return sendJson(res, 200, appSettings());
+    }
   }
 
   if (url.pathname === "/api/library") return sendJson(res, 200, library);

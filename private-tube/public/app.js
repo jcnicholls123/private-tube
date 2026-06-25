@@ -4,6 +4,7 @@ const state = {
   config: { metubeEnabled: false, qualityPresets: [] },
   subscriptions: [],
   users: [],
+  settings: { metubeUrl: "", publicUrl: "" },
   filter: "all",
   query: "",
   channelId: ""
@@ -27,6 +28,13 @@ const loginUsername = document.querySelector("#loginUsername");
 const loginPassword = document.querySelector("#loginPassword");
 const loginStatus = document.querySelector("#loginStatus");
 const logoutButton = document.querySelector("#logoutButton");
+const setupOverlay = document.querySelector("#setupOverlay");
+const setupForm = document.querySelector("#setupForm");
+const setupUsername = document.querySelector("#setupUsername");
+const setupPassword = document.querySelector("#setupPassword");
+const setupMetubeUrl = document.querySelector("#setupMetubeUrl");
+const setupPublicUrl = document.querySelector("#setupPublicUrl");
+const setupStatus = document.querySelector("#setupStatus");
 const initialParams = new URLSearchParams(location.search);
 
 state.query = initialParams.get("q") || "";
@@ -45,7 +53,7 @@ async function api(path, options = {}) {
   });
 
   if (response.status === 401) {
-    showLogin();
+    if (!state.session.setupRequired) showLogin();
     throw new Error("Authentication required");
   }
 
@@ -56,12 +64,23 @@ async function api(path, options = {}) {
 
 function showLogin() {
   if (!state.session.authEnabled) return;
+  setupOverlay.hidden = true;
   loginOverlay.hidden = false;
 }
 
 function hideLogin() {
   loginOverlay.hidden = true;
   loginStatus.textContent = "";
+}
+
+function showSetup() {
+  loginOverlay.hidden = true;
+  setupOverlay.hidden = false;
+}
+
+function hideSetup() {
+  setupOverlay.hidden = true;
+  setupStatus.textContent = "";
 }
 
 function formatDate(value) {
@@ -92,7 +111,7 @@ function renderQualityOptions() {
 }
 
 function renderChannels() {
-  channelStrip.hidden = state.filter === "subscriptions" || state.filter === "users";
+  channelStrip.hidden = state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
   channelStrip.innerHTML = state.library.channels
     .map((channel) => `
       <button class="channel-pill ${state.channelId === channel.id ? "active" : ""}" type="button" data-channel="${channel.id}">
@@ -133,7 +152,7 @@ function filteredVideos() {
 }
 
 function renderVideos(videos) {
-  grid.hidden = state.filter === "subscriptions" || state.filter === "users";
+  grid.hidden = state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
   grid.innerHTML = videos.map((video) => `
     <article class="video-card">
       <a class="thumb" href="${video.watchUrl}">${thumbnail(video)}</a>
@@ -162,6 +181,9 @@ function renderTitle(videos) {
   } else if (state.filter === "users") {
     viewTitle.textContent = "Users";
     viewMeta.textContent = `${state.users.length} account${state.users.length === 1 ? "" : "s"}`;
+  } else if (state.filter === "settings") {
+    viewTitle.textContent = "Settings";
+    viewMeta.textContent = "Stored in SQLite";
   } else if (state.filter === "channel" && state.channelId) {
     const channel = state.library.channels.find((item) => item.id === state.channelId);
     viewTitle.textContent = channel ? channel.name : "Channel";
@@ -176,8 +198,8 @@ function renderTitle(videos) {
 }
 
 function renderSubscriptions() {
-  adminPanel.hidden = state.filter !== "subscriptions";
   if (state.filter !== "subscriptions") return;
+  adminPanel.hidden = false;
 
   const qualityOptions = state.config.qualityPresets
     .map((quality) => `<option value="${quality.id}">${quality.label}</option>`)
@@ -244,8 +266,9 @@ function renderSubscriptions() {
 }
 
 function renderUsers() {
-  adminPanel.hidden = state.filter !== "users";
+  if (state.filter === "settings") return;
   if (state.filter !== "users") return;
+  adminPanel.hidden = false;
 
   adminPanel.innerHTML = `
     <form id="userForm" class="settings-form">
@@ -289,6 +312,42 @@ function renderUsers() {
   });
 }
 
+function renderSettings() {
+  if (state.filter !== "settings") return;
+  adminPanel.hidden = false;
+
+  adminPanel.innerHTML = `
+    <form id="settingsForm" class="settings-form settings-form-wide">
+      <input name="metubeUrl" type="url" placeholder="MeTube URL" value="${state.settings.metubeUrl || ""}">
+      <input name="publicUrl" type="url" placeholder="Chromecast public URL, blank for auto" value="${state.settings.publicUrl || ""}">
+      <button type="submit">Save settings</button>
+    </form>
+    <div class="settings-list">
+      <article class="settings-row">
+        <div>
+          <strong>Chromecast</strong>
+          <p>Blank public URL uses the address you opened PrivateTube with. Set it only if Chromecast needs a different LAN URL.</p>
+        </div>
+      </article>
+      <article class="settings-row">
+        <div>
+          <strong>Secrets</strong>
+          <p>Cast signing secrets and user password hashes are stored in SQLite under /data/private-tube.sqlite.</p>
+        </div>
+      </article>
+    </div>
+  `;
+
+  document.querySelector("#settingsForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    state.settings = await api("/api/settings", { method: "POST", body: JSON.stringify(data) });
+    state.config = await api("/api/config");
+    renderAddPanel();
+    render();
+  });
+}
+
 function renderAddPanel() {
   document.querySelectorAll(".admin-only").forEach((item) => {
     item.hidden = !isAdmin();
@@ -310,22 +369,27 @@ function renderAddPanel() {
 
 function render() {
   const videos = filteredVideos();
+  adminPanel.hidden = !(state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings");
+  if (adminPanel.hidden) adminPanel.innerHTML = "";
   renderChannels();
   renderTitle(videos);
   renderVideos(videos);
   renderSubscriptions();
   renderUsers();
-  emptyState.hidden = videos.length > 0 || state.filter === "subscriptions" || state.filter === "users";
+  renderSettings();
+  emptyState.hidden = videos.length > 0 || state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
 }
 
 async function loadAdminData() {
   if (!isAdmin()) return;
-  const [subscriptions, users] = await Promise.all([
+  const [subscriptions, users, settings] = await Promise.all([
     api("/api/subscriptions"),
-    api("/api/users")
+    api("/api/users"),
+    api("/api/settings")
   ]);
   state.subscriptions = subscriptions.subscriptions;
   state.users = users.users;
+  state.settings = settings;
 }
 
 async function loadLibrary() {
@@ -339,11 +403,16 @@ async function loadLibrary() {
 
 async function boot() {
   state.session = await api("/api/session");
+  if (state.session.setupRequired) {
+    showSetup();
+    return;
+  }
   if (state.session.authEnabled && !state.session.authenticated) {
     showLogin();
     return;
   }
   hideLogin();
+  hideSetup();
   await loadLibrary();
 }
 
@@ -398,6 +467,25 @@ loginForm.addEventListener("submit", async (event) => {
     await boot();
   } catch (error) {
     loginStatus.textContent = error.message;
+  }
+});
+
+setupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setupStatus.textContent = "Creating admin...";
+  try {
+    await api("/api/setup", {
+      method: "POST",
+      body: JSON.stringify({
+        username: setupUsername.value,
+        password: setupPassword.value,
+        metubeUrl: setupMetubeUrl.value,
+        publicUrl: setupPublicUrl.value
+      })
+    });
+    await boot();
+  } catch (error) {
+    setupStatus.textContent = error.message;
   }
 });
 

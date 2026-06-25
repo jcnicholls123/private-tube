@@ -8,51 +8,15 @@ PrivateTube scans a mounted folder, treats the first folder level as channels, a
 
 Use `truenas-compose.yml` as the YAML for a TrueNAS custom app.
 
-Before deploying, edit:
-
-```yaml
-METUBE_URL: http://TRUENAS-IP:30094
-```
-
-and:
+Before deploying, edit the media path:
 
 ```yaml
 - /mnt/Media/downloads/YouTube:/media:ro
 ```
 
-to match your MeTube URL and video dataset.
+to match your video dataset.
 
-Also change the initial admin password:
-
-```yaml
-ADMIN_USERNAME: admin
-ADMIN_PASSWORD: change-me
-RESET_ADMIN_PASSWORD: "false"
-CAST_SECRET: change-this-too
-RESET_CAST_SECRET: "false"
-```
-
-If you cannot log in after changing the password, set this to `"true"` for one restart:
-
-```yaml
-RESET_ADMIN_PASSWORD: "true"
-```
-
-After logging in successfully, set it back to `"false"` and redeploy.
-
-`CAST_SECRET` is saved into SQLite on first startup. To rotate it later, set this to `"true"` for one restart:
-
-```yaml
-RESET_CAST_SECRET: "true"
-```
-
-For Chromecast, set a LAN-reachable app URL:
-
-```yaml
-PUBLIC_URL: http://TRUENAS-IP:3020
-```
-
-PrivateTube stores local users and channel subscriptions in:
+PrivateTube stores local users, channel subscriptions, settings, password hashes, and app secrets in:
 
 ```yaml
 - /mnt/Media/apps/private-tube:/data
@@ -60,11 +24,23 @@ PrivateTube stores local users and channel subscriptions in:
 
 Create that dataset/folder before deploying.
 
-Auth data, password hashes, subscriptions, and app secrets are stored in:
+On first launch, PrivateTube opens a setup screen where you create the admin user. After that, use the in-app Settings page to set the MeTube URL and optional Chromecast public URL.
+
+Auth data, password hashes, subscriptions, settings, and app secrets are stored in:
 
 ```text
 /data/private-tube.sqlite
 ```
+
+If you lock yourself out, you can still use emergency environment variables:
+
+```yaml
+ADMIN_USERNAME: admin
+ADMIN_PASSWORD: temporary-password
+RESET_ADMIN_PASSWORD: "true"
+```
+
+Remove them or set `RESET_ADMIN_PASSWORD` back to `"false"` after logging in.
 
 The app listens on:
 
@@ -102,7 +78,7 @@ and mount media read-write:
 
 The watch page includes native Chromecast support. Use WebM or MP4 files for best playback support.
 
-Chromecast devices fetch media directly from PrivateTube, so `PUBLIC_URL` must be reachable from the Chromecast on your LAN.
+Chromecast devices fetch media directly from PrivateTube. By default, PrivateTube uses the address you opened it with. If your Chromecast needs a different LAN URL, set it in the in-app Settings page.
 
 ## Development
 
