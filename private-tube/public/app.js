@@ -4,6 +4,8 @@ const state = {
   config: { metubeEnabled: false, qualityPresets: [] },
   subscriptions: [],
   users: [],
+  downloads: [],
+  progress: [],
   settings: { metubeUrl: "", publicUrl: "" },
   filter: "all",
   query: "",
@@ -24,6 +26,16 @@ const qualityInfo = document.querySelector("#qualityInfo");
 const addStatus = document.querySelector("#addStatus");
 const adminPanel = document.querySelector("#adminPanel");
 const logoutButton = document.querySelector("#logoutButton");
+const menuButton = document.querySelector("#menuButton");
+const appMenu = document.querySelector("#appMenu");
+const menuBackdrop = document.querySelector("#menuBackdrop");
+const themeButton = document.querySelector("#themeButton");
+const downloadStatus = document.querySelector("#downloadStatus");
+const downloadStatusText = document.querySelector("#downloadStatusText");
+const downloadStatusBar = document.querySelector("#downloadStatusBar");
+const continueSection = document.querySelector("#continueSection");
+const continueGrid = document.querySelector("#continueGrid");
+const continueMeta = document.querySelector("#continueMeta");
 const initialParams = new URLSearchParams(location.search);
 
 state.query = initialParams.get("q") || "";
@@ -33,6 +45,33 @@ searchInput.value = state.query;
 
 function isAdmin() {
   return state.session.user?.role === "admin";
+}
+
+function applyTheme(theme = localStorage.getItem("pt-theme") || "dark") {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("pt-theme", theme);
+  if (themeButton) themeButton.textContent = theme === "dark" ? "Day mode" : "Night mode";
+}
+
+function toggleTheme() {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+}
+
+function closeMenu() {
+  appMenu.setAttribute("hidden", "");
+  menuBackdrop.setAttribute("hidden", "");
+  menuButton.setAttribute("aria-expanded", "false");
+}
+
+function openMenu() {
+  appMenu.removeAttribute("hidden");
+  menuBackdrop.removeAttribute("hidden");
+  menuButton.setAttribute("aria-expanded", "true");
+}
+
+function toggleMenu() {
+  if (appMenu.hasAttribute("hidden")) openMenu();
+  else closeMenu();
 }
 
 async function api(path, options = {}) {
@@ -80,6 +119,13 @@ function formatSize(bytes) {
   return `${size.toFixed(index ? 1 : 0)} ${units[index]}`;
 }
 
+function formatTime(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = Math.floor(total / 60);
+  const rest = String(total % 60).padStart(2, "0");
+  return `${minutes}:${rest}`;
+}
+
 function thumbnail(video) {
   if (video.thumbnail) return `<img src="${video.thumbnail}" alt="">`;
   return `<div class="thumb-fallback"><span></span></div>`;
@@ -110,6 +156,20 @@ function renderQualityOptions() {
   renderQualityInfo();
 }
 
+function selectFilter(filter, channelId = "") {
+  state.filter = filter;
+  state.channelId = channelId;
+  state.query = filter === "channel" ? "" : state.query;
+  searchInput.value = state.query;
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.filter === filter || (filter === "channel" && item.dataset.filter === "channels"));
+  });
+  const nextUrl = channelId ? `/?channel=${encodeURIComponent(channelId)}` : "/";
+  history.replaceState(null, "", nextUrl);
+  closeMenu();
+  render();
+}
+
 function renderChannels() {
   channelStrip.hidden = state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
   channelStrip.innerHTML = state.library.channels
@@ -122,13 +182,7 @@ function renderChannels() {
     .join("");
 
   channelStrip.querySelectorAll("[data-channel]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.channelId = button.dataset.channel;
-      state.filter = "channel";
-      history.replaceState(null, "", `/?channel=${encodeURIComponent(state.channelId)}`);
-      document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
-      render();
-    });
+    button.addEventListener("click", () => selectFilter("channel", button.dataset.channel));
   });
 }
 
@@ -144,11 +198,17 @@ function filteredVideos() {
   if (state.query.trim()) {
     const query = state.query.toLowerCase();
     videos = videos.filter((video) =>
-      `${video.title} ${video.channel}`.toLowerCase().includes(query)
+      `${video.title} ${video.channel} ${video.description || ""}`.toLowerCase().includes(query)
     );
   }
 
   return videos;
+}
+
+function videoMeta(video) {
+  const date = video.uploadedAt || video.modifiedAt;
+  const parts = [formatDate(date), formatSize(video.size)].filter(Boolean);
+  return parts.join(" &middot; ");
 }
 
 function renderVideos(videos) {
@@ -159,19 +219,50 @@ function renderVideos(videos) {
       <div class="video-copy">
         <a class="video-title" href="${video.watchUrl}">${video.title}</a>
         <button class="channel-name" type="button" data-channel="${video.channelId}">${video.channel}</button>
-        <p>${formatDate(video.modifiedAt)} · ${formatSize(video.size)}</p>
+        <p>${videoMeta(video)}</p>
       </div>
     </article>
   `).join("");
 
   grid.querySelectorAll("[data-channel]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.channelId = button.dataset.channel;
-      state.filter = "channel";
-      history.replaceState(null, "", `/?channel=${encodeURIComponent(state.channelId)}`);
-      render();
-    });
+    button.addEventListener("click", () => selectFilter("channel", button.dataset.channel));
   });
+}
+
+function renderContinue() {
+  const items = state.progress.filter((item) => item.video && item.position > 5);
+  continueSection.hidden = items.length === 0 || state.filter !== "all" || Boolean(state.query);
+  if (continueSection.hidden) {
+    continueGrid.innerHTML = "";
+    return;
+  }
+
+  continueMeta.textContent = `${items.length} video${items.length === 1 ? "" : "s"}`;
+  continueGrid.innerHTML = items.slice(0, 8).map((item) => {
+    const percent = item.duration ? Math.max(2, Math.min(98, (item.position / item.duration) * 100)) : 0;
+    const href = `${item.video.watchUrl}&t=${Math.floor(item.position)}`;
+    return `
+      <article class="continue-card">
+        <a class="thumb" href="${href}">
+          ${thumbnail(item.video)}
+          <span class="watch-progress"><span style="width: ${percent}%"></span></span>
+        </a>
+        <a class="video-title" href="${href}">${item.video.title}</a>
+        <p>${formatTime(item.position)} watched &middot; ${item.video.channel}</p>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderDownloadStatus() {
+  const latest = state.downloads[0];
+  downloadStatus.hidden = !latest;
+  if (!latest) return;
+
+  const label = latest.status === "queued" ? "Queued in MeTube" : latest.status === "failed" ? "Failed" : latest.status;
+  downloadStatusText.textContent = `${label} - ${qualityLabel(latest.quality)}`;
+  downloadStatusBar.style.width = latest.status === "failed" ? "100%" : "72%";
+  downloadStatus.classList.toggle("failed", latest.status === "failed");
 }
 
 function renderTitle(videos) {
@@ -188,6 +279,9 @@ function renderTitle(videos) {
     const channel = state.library.channels.find((item) => item.id === state.channelId);
     viewTitle.textContent = channel ? channel.name : "Channel";
     viewMeta.textContent = `${videos.length} video${videos.length === 1 ? "" : "s"}`;
+  } else if (state.filter === "channels") {
+    viewTitle.textContent = "Channels";
+    viewMeta.textContent = `${state.library.channels.length} channel${state.library.channels.length === 1 ? "" : "s"}`;
   } else if (state.filter === "recent") {
     viewTitle.textContent = "Latest";
     viewMeta.textContent = `${videos.length} video${videos.length === 1 ? "" : "s"}`;
@@ -222,7 +316,7 @@ function renderSubscriptions() {
           <div>
             <strong>${item.name}</strong>
             <p>${item.url}</p>
-            <p>Quality: ${qualityLabel(item.quality || "auto")} · Every ${item.intervalHours || 24}h · Retention: ${item.retentionDays || 0} days · Last: ${formatDate(item.lastRunAt)} · ${item.lastStatus || "new"}</p>
+            <p>Quality: ${qualityLabel(item.quality || "auto")} &middot; Every ${item.intervalHours || 24}h &middot; Retention: ${item.retentionDays || 0} days &middot; Last: ${formatDate(item.lastRunAt)} &middot; ${item.lastStatus || "new"}</p>
           </div>
           <div class="row-actions">
             <button type="button" data-run="${item.id}">Run</button>
@@ -240,6 +334,7 @@ function renderSubscriptions() {
     data.retentionDays = Number(data.retentionDays);
     await api("/api/subscriptions", { method: "POST", body: JSON.stringify(data) });
     await loadAdminData();
+    await loadDownloads();
     render();
   });
 
@@ -253,6 +348,7 @@ function renderSubscriptions() {
     button.addEventListener("click", async () => {
       await api(`/api/subscriptions/${button.dataset.run}/run`, { method: "POST" });
       await loadAdminData();
+      await loadDownloads();
       render();
     });
   });
@@ -286,7 +382,7 @@ function renderUsers() {
         <article class="settings-row">
           <div>
             <strong>${user.username}</strong>
-            <p>${user.role} · Created ${formatDate(user.createdAt)}</p>
+            <p>${user.role} &middot; Created ${formatDate(user.createdAt)}</p>
           </div>
           <div class="row-actions">
             <button type="button" data-delete-user="${user.username}">Delete</button>
@@ -332,8 +428,8 @@ function renderSettings() {
       </article>
       <article class="settings-row">
         <div>
-          <strong>Secrets</strong>
-          <p>Cast signing secrets and user password hashes are stored in SQLite under /data/private-tube.sqlite.</p>
+          <strong>Descriptions</strong>
+          <p>PrivateTube reads .info.json and .description files beside videos. Enable metadata sidecars in MeTube/yt-dlp for full YouTube descriptions.</p>
         </div>
       </article>
       <article class="settings-row">
@@ -387,6 +483,8 @@ function render() {
   adminPanel.hidden = !(state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings");
   if (adminPanel.hidden) adminPanel.innerHTML = "";
   renderChannels();
+  renderContinue();
+  renderDownloadStatus();
   renderTitle(videos);
   renderVideos(videos);
   renderSubscriptions();
@@ -407,16 +505,34 @@ async function loadAdminData() {
   state.settings = settings;
 }
 
+async function loadDownloads() {
+  const result = await api("/api/downloads");
+  state.downloads = result.downloads || [];
+}
+
+async function loadProgress() {
+  const result = await api("/api/progress");
+  state.progress = result.progress || [];
+}
+
 async function loadLibrary() {
   state.config = await api("/api/config");
   renderQualityOptions();
-  state.library = await api("/api/library");
+  const [library, downloads, progress] = await Promise.all([
+    api("/api/library"),
+    api("/api/downloads"),
+    api("/api/progress")
+  ]);
+  state.library = library;
+  state.downloads = downloads.downloads || [];
+  state.progress = progress.progress || [];
   await loadAdminData();
   renderAddPanel();
   render();
 }
 
 async function boot() {
+  applyTheme();
   state.session = await api("/api/session");
   if (state.session.setupRequired) {
     location.href = "/setup.html";
@@ -427,18 +543,22 @@ async function boot() {
     return;
   }
   await loadLibrary();
+  window.setInterval(async () => {
+    await loadDownloads();
+    renderDownloadStatus();
+  }, 10000);
 }
 
 document.querySelectorAll(".nav-item").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
-    button.classList.add("active");
-    state.filter = button.dataset.filter;
-    state.channelId = "";
-    history.replaceState(null, "", "/");
-    render();
-  });
+  button.addEventListener("click", () => selectFilter(button.dataset.filter));
 });
+
+document.querySelectorAll("[data-menu-filter]").forEach((button) => {
+  button.addEventListener("click", () => selectFilter(button.dataset.menuFilter));
+});
+
+menuBackdrop.addEventListener("click", closeMenu);
+themeButton.addEventListener("click", toggleTheme);
 
 searchInput.addEventListener("input", () => {
   state.query = searchInput.value;
@@ -454,6 +574,7 @@ rescanButton.addEventListener("click", async () => {
   await api("/api/rescan", { method: "POST" });
   await loadLibrary();
   rescanButton.disabled = false;
+  closeMenu();
 });
 
 addForm.addEventListener("submit", async (event) => {
@@ -464,8 +585,10 @@ addForm.addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({ url: urlInput.value, quality: qualitySelect.value })
     });
-    addStatus.textContent = result.ok ? "Added to MeTube" : "Could not add video";
+    addStatus.textContent = result.ok ? "Queued in MeTube" : "Could not add video";
     if (result.ok) urlInput.value = "";
+    await loadDownloads();
+    renderDownloadStatus();
   } catch (error) {
     addStatus.textContent = error.message;
   }

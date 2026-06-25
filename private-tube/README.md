@@ -95,6 +95,8 @@ Use WebM or MP4 files for best playback support.
 
 Google Cast from the web works best from Chrome or Edge on desktop/Android. iPhone Safari and iPhone home-screen web apps do not support the Google Cast Web Sender SDK; use AirPlay from the iPhone video controls where available.
 
+If Chrome on Windows cannot cast, open PrivateTube using the TrueNAS LAN URL rather than `localhost` or `127.0.0.1`, and set the in-app Chromecast public URL to that same address, for example `http://10.69.24.3:3020`.
+
 ## iPhone Home Screen
 
 Open PrivateTube in Safari, tap Share, then Add to Home Screen.
@@ -116,3 +118,15 @@ Optional env values:
 THUMBNAILS_ENABLED: "true"
 THUMBNAIL_TIME: "00:00:05"
 ```
+
+## Descriptions
+
+PrivateTube reads YouTube descriptions from sidecar files beside the video:
+
+```text
+Video title.webm
+Video title.info.json
+Video title.description
+```
+
+Enable metadata/description sidecars in MeTube or yt-dlp if you want descriptions to appear on the watch page.

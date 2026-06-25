@@ -15,6 +15,11 @@
   </head>
   <body>
     <header class="topbar">
+      <button id="menuButton" class="menu-button" type="button" aria-label="Open menu" aria-expanded="false" onclick="window.ptToggleMenu && window.ptToggleMenu()">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
       <a class="brand" href="/" aria-label="PrivateTube home">
         <span class="brand-mark" aria-hidden="true"></span>
         <span>PrivateTube</span>
@@ -23,9 +28,24 @@
         <span class="sr-only">Search videos</span>
         <input id="searchInput" type="search" placeholder="Search your library">
       </label>
-      <button id="rescanButton" class="icon-button" type="button" title="Rescan library" aria-label="Rescan library">Refresh</button>
-      <button id="logoutButton" class="icon-button" type="button" title="Log out">Exit</button>
     </header>
+
+    <div id="menuBackdrop" class="menu-backdrop" hidden></div>
+    <aside id="appMenu" class="app-menu" hidden aria-label="PrivateTube menu">
+      <div class="menu-head">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <strong>PrivateTube</strong>
+      </div>
+      <button class="menu-item" type="button" data-menu-filter="all">Home</button>
+      <button class="menu-item" type="button" data-menu-filter="recent">Latest</button>
+      <button class="menu-item" type="button" data-menu-filter="channels">Channel management</button>
+      <button class="menu-item admin-only" type="button" data-menu-filter="subscriptions">Subscriptions</button>
+      <button class="menu-item admin-only" type="button" data-menu-filter="users">Users</button>
+      <button class="menu-item admin-only" type="button" data-menu-filter="settings">Settings</button>
+      <button id="rescanButton" class="menu-item" type="button">Rescan library</button>
+      <button id="themeButton" class="menu-item" type="button">Day mode</button>
+      <button id="logoutButton" class="menu-item danger" type="button">Log out</button>
+    </aside>
 
     <main class="shell">
       <aside class="sidebar">
@@ -33,9 +53,6 @@
           <button class="nav-item active" type="button" data-filter="all"><span class="nav-dot"></span><span>Home</span></button>
           <button class="nav-item" type="button" data-filter="recent"><span class="nav-dot"></span><span>Latest</span></button>
           <button class="nav-item" type="button" data-filter="channels"><span class="nav-dot"></span><span>Channels</span></button>
-          <button class="nav-item admin-only" type="button" data-filter="subscriptions"><span class="nav-dot"></span><span>Subscriptions</span></button>
-          <button class="nav-item admin-only" type="button" data-filter="users"><span class="nav-dot"></span><span>Users</span></button>
-          <button class="nav-item admin-only" type="button" data-filter="settings"><span class="nav-dot"></span><span>Settings</span></button>
         </nav>
         <div class="add-panel">
           <form id="addForm">
@@ -49,9 +66,23 @@
             <p id="addStatus"></p>
           </form>
         </div>
+        <section id="downloadStatus" class="download-status" hidden>
+          <div>
+            <strong>Downloads</strong>
+            <span id="downloadStatusText">Idle</span>
+          </div>
+          <div class="status-track"><span id="downloadStatusBar"></span></div>
+        </section>
       </aside>
 
       <section class="content" aria-live="polite">
+        <section id="continueSection" class="continue-section" hidden>
+          <div class="section-title compact">
+            <h2>Continue watching</h2>
+            <p id="continueMeta"></p>
+          </div>
+          <div id="continueGrid" class="continue-grid"></div>
+        </section>
         <div class="section-title">
           <h1 id="viewTitle">Home</h1>
           <p id="viewMeta"></p>
@@ -67,6 +98,17 @@
     </main>
 
     <script src="/pwa.js" type="module"></script>
-    <script src="/app.js?v=20260625-youtube-ui" type="module"></script>
+    <script>
+      window.ptToggleMenu = function () {
+        const menu = document.querySelector("#appMenu");
+        const backdrop = document.querySelector("#menuBackdrop");
+        const button = document.querySelector("#menuButton");
+        const open = menu.hasAttribute("hidden");
+        menu.toggleAttribute("hidden", !open);
+        backdrop.toggleAttribute("hidden", !open);
+        button.setAttribute("aria-expanded", String(open));
+      };
+    </script>
+    <script src="/app.js?v=20260625-menu-progress" type="module"></script>
   </body>
 </html>

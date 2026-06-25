@@ -237,6 +237,24 @@ function initSchema() {
     created_at TEXT NOT NULL,
     updated_at TEXT
   )`);
+  run(`CREATE TABLE IF NOT EXISTS download_events (
+    id TEXT PRIMARY KEY,
+    url TEXT NOT NULL,
+    quality TEXT NOT NULL,
+    source TEXT NOT NULL,
+    status TEXT NOT NULL,
+    message TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`);
+  run(`CREATE TABLE IF NOT EXISTS watch_progress (
+    username TEXT NOT NULL,
+    video_id TEXT NOT NULL,
+    position REAL NOT NULL DEFAULT 0,
+    duration REAL NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (username, video_id)
+  )`);
 }
 
 function getSecret(key) {
@@ -340,6 +358,50 @@ function updateSubscriptionRun(subscription) {
 
 function deleteSubscription(id) {
   run("DELETE FROM subscriptions WHERE id = ?", [id]);
+}
+
+function recordDownloadEvent(event) {
+  const now = new Date().toISOString();
+  run(`INSERT INTO download_events (id, url, quality, source, status, message, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET status = excluded.status, message = excluded.message, updated_at = excluded.updated_at`, [
+    event.id,
+    event.url,
+    event.quality || "auto",
+    event.source || "manual",
+    event.status,
+    event.message || "",
+    event.createdAt || now,
+    now
+  ]);
+}
+
+function recentDownloadEvents() {
+  return all(`SELECT id, url, quality, source, status, message, created_at AS createdAt, updated_at AS updatedAt
+    FROM download_events ORDER BY updated_at DESC LIMIT 12`);
+}
+
+function saveWatchProgress(username, videoId, position, duration) {
+  const now = new Date().toISOString();
+  if (!username || !videoId) return;
+  const safePosition = Math.max(0, Number(position) || 0);
+  const safeDuration = Math.max(0, Number(duration) || 0);
+  if (safeDuration && safeDuration - safePosition < 20) {
+    run("DELETE FROM watch_progress WHERE username = ? AND video_id = ?", [username, videoId]);
+    return;
+  }
+
+  run(`INSERT INTO watch_progress (username, video_id, position, duration, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(username, video_id) DO UPDATE SET
+      position = excluded.position,
+      duration = excluded.duration,
+      updated_at = excluded.updated_at`, [username, videoId, safePosition, safeDuration, now]);
+}
+
+function getWatchProgress(username) {
+  return all(`SELECT video_id AS videoId, position, duration, updated_at AS updatedAt
+    FROM watch_progress WHERE username = ? ORDER BY updated_at DESC LIMIT 24`, [username]);
 }
 
 async function migrateLegacyJson() {
@@ -479,6 +541,15 @@ function titleFromFile(filePath) {
     .trim();
 }
 
+function normalizeUploadDate(value) {
+  if (!value) return "";
+  const text = String(value);
+  if (/^\d{8}$/.test(text)) {
+    return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+  }
+  return text;
+}
+
 async function exists(filePath) {
   try {
     await fs.access(filePath);
@@ -486,6 +557,47 @@ async function exists(filePath) {
   } catch {
     return false;
   }
+}
+
+async function readSidecarText(candidates) {
+  for (const candidate of candidates) {
+    try {
+      const text = (await fs.readFile(candidate, "utf8")).trim();
+      if (text) return text;
+    } catch {}
+  }
+  return "";
+}
+
+async function readVideoMetadata(filePath) {
+  const parsed = path.parse(filePath);
+  const infoJson = path.join(parsed.dir, `${parsed.name}.info.json`);
+  const description = await readSidecarText([
+    path.join(parsed.dir, `${parsed.name}.description`),
+    path.join(parsed.dir, `${parsed.name}.description.txt`),
+    path.join(parsed.dir, `${parsed.name}.txt`)
+  ]);
+
+  const metadata = {
+    title: "",
+    description,
+    uploader: "",
+    sourceUrl: "",
+    uploadedAt: "",
+    duration: ""
+  };
+
+  try {
+    const info = JSON.parse(await fs.readFile(infoJson, "utf8"));
+    metadata.title = info.title || "";
+    metadata.description = info.description || metadata.description;
+    metadata.uploader = info.channel || info.uploader || "";
+    metadata.sourceUrl = info.webpage_url || info.original_url || "";
+    metadata.uploadedAt = normalizeUploadDate(info.upload_date || info.release_date || "");
+    metadata.duration = info.duration_string || "";
+  } catch {}
+
+  return metadata;
 }
 
 async function findThumbnail(filePath, relativePath) {
@@ -582,17 +694,22 @@ async function scanLibrary() {
     const channelName = pathParts.length > 1 ? pathParts[0] : "Uploads";
     const id = Buffer.from(relativePath).toString("base64url");
     const thumbnail = await findThumbnail(filePath, relativePath) || await generateThumbnail(filePath, id);
+    const metadata = await readVideoMetadata(filePath);
 
     const video = {
       id,
-      title: titleFromFile(filePath),
-      channel: channelName,
-      channelId: slugify(channelName),
+      title: metadata.title || titleFromFile(filePath),
+      channel: metadata.uploader || channelName,
+      channelId: slugify(metadata.uploader || channelName),
       path: relativePath,
       url: `/media/${encodeURIComponent(relativePath)}`,
       watchUrl: `/watch.html?v=${encodeURIComponent(id)}`,
       thumbnail,
       contentType: mediaContentType(filePath),
+      description: metadata.description,
+      sourceUrl: metadata.sourceUrl,
+      uploadedAt: metadata.uploadedAt,
+      duration: metadata.duration,
       size: stats.size,
       modifiedAt: stats.mtime.toISOString()
     };
@@ -630,15 +747,24 @@ function qualityPayload(quality) {
   return { quality: "best" };
 }
 
-async function addToMetube(url, quality = "auto") {
+async function addToMetube(url, quality = "auto", source = "manual") {
   const metubeUrl = getAppSetting("metube_url");
   if (!metubeUrl) throw new Error("MeTube URL is not configured");
+  const eventId = crypto.randomBytes(12).toString("base64url");
   const response = await fetch(`${metubeUrl}/add`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ url, ...qualityPayload(quality) })
   });
-  return { ok: response.ok, status: response.status };
+  recordDownloadEvent({
+    id: eventId,
+    url,
+    quality,
+    source,
+    status: response.ok ? "queued" : "failed",
+    message: response.ok ? "Sent to MeTube" : `MeTube returned ${response.status}`
+  });
+  return { ok: response.ok, status: response.status, eventId };
 }
 
 async function runSubscription(subscription, force = false) {
@@ -649,7 +775,7 @@ async function runSubscription(subscription, force = false) {
     return;
   }
 
-  const result = await addToMetube(subscription.url, subscription.quality || "auto");
+  const result = await addToMetube(subscription.url, subscription.quality || "auto", "subscription");
   subscription.lastRunAt = new Date().toISOString();
   subscription.lastStatus = result.ok ? "queued" : `failed ${result.status}`;
   updateSubscriptionRun(subscription);
@@ -899,6 +1025,24 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/library") return sendJson(res, 200, library);
 
+  if (url.pathname === "/api/downloads") return sendJson(res, 200, { downloads: recentDownloadEvents() });
+
+  if (url.pathname === "/api/progress") {
+    if (req.method === "GET") {
+      const progress = getWatchProgress(session.username).map((item) => ({
+        ...item,
+        video: library.videos.find((video) => video.id === item.videoId) || null
+      })).filter((item) => item.video);
+      return sendJson(res, 200, { progress });
+    }
+
+    if (req.method === "POST") {
+      const payload = await readBody(req);
+      saveWatchProgress(session.username, payload.videoId, payload.position, payload.duration);
+      return sendJson(res, 200, { ok: true });
+    }
+  }
+
   if (url.pathname.startsWith("/api/cast/")) {
     const id = safeDecode(url.pathname.slice("/api/cast/".length));
     const video = library.videos.find((item) => item.id === id);
@@ -1016,7 +1160,7 @@ async function handleApi(req, res, url) {
     try {
       const payload = await readBody(req);
       if (!payload.url) return sendJson(res, 400, { error: "Missing url" });
-      const result = await addToMetube(payload.url, payload.quality || "best");
+      const result = await addToMetube(payload.url, payload.quality || "auto", "manual");
       return sendJson(res, result.ok ? 200 : 502, result);
     } catch (error) {
       return sendJson(res, 500, { error: error.message });

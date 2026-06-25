@@ -1,5 +1,6 @@
 const params = new URLSearchParams(location.search);
 const videoId = params.get("v");
+const startAt = Number(params.get("t") || 0);
 const player = document.querySelector("#player");
 const videoTitle = document.querySelector("#videoTitle");
 const channelLink = document.querySelector("#channelLink");
@@ -8,9 +9,14 @@ const searchInput = document.querySelector("#searchInput");
 const castButton = document.querySelector("#castButton");
 const airplayButton = document.querySelector("#airplayButton");
 const castStatus = document.querySelector("#castStatus");
+const castDiagnostics = document.querySelector("#castDiagnostics");
+const videoDescription = document.querySelector("#videoDescription");
 
 let currentVideo = null;
 let castReady = false;
+let lastProgressSave = 0;
+
+document.documentElement.dataset.theme = localStorage.getItem("pt-theme") || "dark";
 
 function isIOS() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -23,6 +29,48 @@ function thumbnail(video) {
 
 function setCastStatus(message) {
   castStatus.textContent = message;
+}
+
+function setCastDiagnostics(message) {
+  castDiagnostics.textContent = message || "";
+}
+
+function isLocalCastHost(hostname = location.hostname) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function renderDescription(video) {
+  const lines = [];
+  if (video.uploadedAt) lines.push(`<strong>Uploaded ${video.uploadedAt}</strong>`);
+  if (video.sourceUrl) lines.push(`<a href="${video.sourceUrl}" target="_blank" rel="noreferrer">Original YouTube page</a>`);
+  if (video.description) lines.push(`<p>${video.description.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replace(/\n/g, "<br>")}</p>`);
+
+  videoDescription.hidden = lines.length === 0;
+  videoDescription.innerHTML = lines.join("");
+}
+
+async function saveProgress(force = false) {
+  if (!currentVideo || !player.duration) return;
+  if (!force && Date.now() - lastProgressSave < 10000) return;
+  lastProgressSave = Date.now();
+
+  await fetch("/api/progress", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      videoId: currentVideo.id,
+      position: player.currentTime,
+      duration: player.duration
+    }),
+    keepalive: force
+  }).catch(() => {});
+}
+
+function setupProgressSaving() {
+  player.addEventListener("timeupdate", () => saveProgress());
+  player.addEventListener("pause", () => saveProgress(true));
+  player.addEventListener("ended", () => saveProgress(true));
+  window.addEventListener("pagehide", () => saveProgress(true));
 }
 
 function setupAirPlay() {
@@ -67,6 +115,7 @@ async function api(path) {
 function initializeCastApi() {
   if (!window.cast?.framework || !window.chrome?.cast) {
     setCastStatus(isIOS() ? "Chromecast is not supported in iPhone Safari" : "Cast unavailable");
+    setCastDiagnostics("Chrome did not expose the Google Cast sender API on this page.");
     return;
   }
 
@@ -79,6 +128,7 @@ function initializeCastApi() {
   castReady = true;
   castButton.disabled = !currentVideo;
   setCastStatus("Ready to cast");
+  setCastDiagnostics(isLocalCastHost() ? "You opened PrivateTube on localhost. Chromecast needs the TrueNAS LAN URL in Settings > Chromecast public URL." : "");
 }
 
 window.__onGCastApiAvailable = (isAvailable) => {
@@ -89,18 +139,26 @@ window.__onGCastApiAvailable = (isAvailable) => {
 function loadCastSdk() {
   if (isIOS()) {
     setCastStatus("Chromecast is not available on iPhone Safari. Use AirPlay.");
+    setCastDiagnostics("");
     return;
   }
 
   setCastStatus("Looking for Cast support...");
+  setCastDiagnostics(isLocalCastHost() ? "Open PrivateTube using your TrueNAS IP, not localhost, before casting." : "Loading the Google Cast sender SDK...");
   const script = document.createElement("script");
   script.src = "https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1";
   script.async = true;
-  script.onerror = () => setCastStatus("Could not load Cast SDK");
+  script.onerror = () => {
+    setCastStatus("Could not load Cast SDK");
+    setCastDiagnostics("Chrome must be able to reach www.gstatic.com to load the Google Cast sender SDK.");
+  };
   document.head.appendChild(script);
 
   window.setTimeout(() => {
-    if (!castReady) setCastStatus("Use Google Chrome with a Chromecast on this network");
+    if (!castReady) {
+      setCastStatus("Use Google Chrome with a Chromecast on this network");
+      setCastDiagnostics("If this is Chrome on Windows, check that Cast is enabled, the Chromecast is on the same network, and this page is opened by the TrueNAS LAN URL.");
+    }
   }, 5000);
 }
 
@@ -110,6 +168,13 @@ async function castCurrentVideo() {
   try {
     setCastStatus("Connecting...");
     const castInfo = await api(`/api/cast/${encodeURIComponent(currentVideo.id)}`);
+    const mediaHost = new URL(castInfo.mediaUrl).hostname;
+    setCastDiagnostics(`Cast media URL: ${castInfo.mediaUrl}`);
+    if (isLocalCastHost(mediaHost)) {
+      setCastStatus("Cast URL is not reachable by Chromecast");
+      setCastDiagnostics("Set Settings > Chromecast public URL to your TrueNAS address, e.g. http://10.69.24.3:3020, then try again.");
+      return;
+    }
     const context = cast.framework.CastContext.getInstance();
     const session = context.getCurrentSession() || await context.requestSession();
     const mediaInfo = new chrome.cast.media.MediaInfo(castInfo.mediaUrl, castInfo.contentType || "video/webm");
@@ -129,7 +194,10 @@ async function castCurrentVideo() {
 }
 
 async function load() {
-  const library = await api("/api/library");
+  const [library, progressResult] = await Promise.all([
+    api("/api/library"),
+    api("/api/progress").catch(() => ({ progress: [] }))
+  ]);
   const video = library.videos.find((item) => item.id === videoId);
 
   if (!video) {
@@ -137,13 +205,21 @@ async function load() {
     return;
   }
 
+  const saved = progressResult.progress?.find((item) => item.videoId === video.id);
+  const resumeAt = startAt || saved?.position || 0;
+
   currentVideo = video;
   document.title = `${video.title} - PrivateTube`;
   player.src = video.url;
+  player.addEventListener("loadedmetadata", () => {
+    if (resumeAt > 5 && resumeAt < player.duration - 5) player.currentTime = resumeAt;
+  }, { once: true });
   videoTitle.textContent = video.title;
   channelLink.textContent = video.channel;
   channelLink.href = `/?channel=${encodeURIComponent(video.channelId)}`;
+  renderDescription(video);
   renderRelated(library.videos, video);
+  setupProgressSaving();
   castButton.disabled = !castReady;
 
   searchInput.addEventListener("keydown", (event) => {
