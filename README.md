@@ -27,6 +27,13 @@ Also change the initial admin password:
 ```yaml
 ADMIN_USERNAME: admin
 ADMIN_PASSWORD: change-me
+CAST_SECRET: change-this-too
+```
+
+For Chromecast, set a LAN-reachable app URL:
+
+```yaml
+PUBLIC_URL: http://TRUENAS-IP:3020
 ```
 
 PrivateTube stores local users and channel subscriptions in:
@@ -68,6 +75,12 @@ and mount media read-write:
 ```yaml
 - /mnt/Media/downloads/YouTube:/media
 ```
+
+## Chromecast
+
+The watch page includes native Chromecast support. Use WebM or MP4 files for best playback support.
+
+Chromecast devices fetch media directly from PrivateTube, so `PUBLIC_URL` must be reachable from the Chromecast on your LAN.
 
 ## Development
 

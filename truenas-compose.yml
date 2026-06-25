@@ -9,11 +9,14 @@ services:
       PORT: "3020"
       MEDIA_DIR: /media
       DATA_DIR: /data
+      # Chromecast devices need a LAN-reachable URL for this app.
+      PUBLIC_URL: http://TRUENAS-IP:3020
       # Change this to your MeTube WebUI URL.
       METUBE_URL: http://TRUENAS-IP:30094
       # Change these before exposing the app to your network.
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: change-me
+      CAST_SECRET: change-this-too
       AUTH_ENABLED: "true"
       # Set to "true" only if you want retention rules to delete local files.
       ALLOW_DELETE: "false"

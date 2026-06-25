@@ -5,10 +5,19 @@ const videoTitle = document.querySelector("#videoTitle");
 const channelLink = document.querySelector("#channelLink");
 const relatedGrid = document.querySelector("#relatedGrid");
 const searchInput = document.querySelector("#searchInput");
+const castButton = document.querySelector("#castButton");
+const castStatus = document.querySelector("#castStatus");
+
+let currentVideo = null;
+let castReady = false;
 
 function thumbnail(video) {
   if (video.thumbnail) return `<img src="${video.thumbnail}" alt="">`;
-  return `<div class="thumb-fallback"><span>▶</span></div>`;
+  return `<div class="thumb-fallback"><span>Play</span></div>`;
+}
+
+function setCastStatus(message) {
+  castStatus.textContent = message;
 }
 
 function renderRelated(videos, current) {
@@ -27,9 +36,65 @@ function renderRelated(videos, current) {
   `).join("");
 }
 
+async function api(path) {
+  const response = await fetch(path);
+  if (response.status === 401) {
+    location.href = "/";
+    throw new Error("Authentication required");
+  }
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Request failed");
+  return result;
+}
+
+function initializeCastApi() {
+  if (!window.cast?.framework || !window.chrome?.cast) {
+    setCastStatus("Cast unavailable");
+    return;
+  }
+
+  const context = cast.framework.CastContext.getInstance();
+  context.setOptions({
+    receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+    autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+  });
+
+  castReady = true;
+  castButton.disabled = !currentVideo;
+  setCastStatus("Ready to cast");
+}
+
+window.__onGCastApiAvailable = (isAvailable) => {
+  if (isAvailable) initializeCastApi();
+  else setCastStatus("Cast unavailable");
+};
+
+async function castCurrentVideo() {
+  if (!castReady || !currentVideo) return;
+
+  try {
+    setCastStatus("Connecting...");
+    const castInfo = await api(`/api/cast/${encodeURIComponent(currentVideo.id)}`);
+    const context = cast.framework.CastContext.getInstance();
+    const session = context.getCurrentSession() || await context.requestSession();
+    const mediaInfo = new chrome.cast.media.MediaInfo(castInfo.mediaUrl, castInfo.contentType || "video/webm");
+    const metadata = new chrome.cast.media.GenericMediaMetadata();
+    metadata.title = castInfo.title;
+    metadata.subtitle = castInfo.channel;
+    if (castInfo.thumbnail) metadata.images = [new chrome.cast.Image(castInfo.thumbnail)];
+    mediaInfo.metadata = metadata;
+
+    const request = new chrome.cast.media.LoadRequest(mediaInfo);
+    await session.loadMedia(request);
+    player.pause();
+    setCastStatus("Casting");
+  } catch (error) {
+    setCastStatus(error.message || "Could not cast");
+  }
+}
+
 async function load() {
-  const response = await fetch("/api/library");
-  const library = await response.json();
+  const library = await api("/api/library");
   const video = library.videos.find((item) => item.id === videoId);
 
   if (!video) {
@@ -37,12 +102,14 @@ async function load() {
     return;
   }
 
+  currentVideo = video;
   document.title = `${video.title} - PrivateTube`;
   player.src = video.url;
   videoTitle.textContent = video.title;
   channelLink.textContent = video.channel;
   channelLink.href = `/?channel=${encodeURIComponent(video.channelId)}`;
   renderRelated(library.videos, video);
+  castButton.disabled = !castReady;
 
   searchInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -51,4 +118,5 @@ async function load() {
   });
 }
 
+castButton.addEventListener("click", castCurrentVideo);
 load();

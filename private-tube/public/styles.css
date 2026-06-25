@@ -69,7 +69,8 @@ input {
   height: 24px;
   border-radius: 7px;
   background: var(--accent);
-  font-size: 13px;
+  font-size: 12px;
+  letter-spacing: 0;
 }
 
 .search input,
@@ -401,8 +402,21 @@ input {
   background: #000;
 }
 
+.player-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding-top: 10px;
+}
+
+.player-actions span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .player-panel h1 {
-  margin: 16px 0 8px;
+  margin: 8px 0;
   font-size: 24px;
 }
 

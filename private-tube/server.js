@@ -9,12 +9,14 @@ const PORT = Number(process.env.PORT || 3020);
 const MEDIA_DIR = path.resolve(process.env.MEDIA_DIR || path.join(__dirname, "media"));
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, "data"));
 const METUBE_URL = (process.env.METUBE_URL || "").replace(/\/$/, "");
+const PUBLIC_URL = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
 const SCAN_INTERVAL_MS = Number(process.env.SCAN_INTERVAL_MS || 5 * 60 * 1000);
 const CHANNEL_CHECK_INTERVAL_MS = Number(process.env.CHANNEL_CHECK_INTERVAL_MS || 15 * 60 * 1000);
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const AUTH_ENABLED = process.env.AUTH_ENABLED !== "false" && Boolean(ADMIN_USERNAME && ADMIN_PASSWORD);
 const ALLOW_DELETE = process.env.ALLOW_DELETE === "true";
+const CAST_SECRET = process.env.CAST_SECRET || ADMIN_PASSWORD || crypto.randomBytes(32).toString("hex");
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi"]);
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
@@ -51,6 +53,42 @@ function sendJson(res, statusCode, body) {
 function sendText(res, statusCode, body) {
   res.writeHead(statusCode, { "content-type": "text/plain; charset=utf-8" });
   res.end(body);
+}
+
+function requestOrigin(req) {
+  const proto = req.headers["x-forwarded-proto"] || "http";
+  return `${proto}://${req.headers.host}`;
+}
+
+function absoluteUrl(req, relativeUrl) {
+  return `${PUBLIC_URL || requestOrigin(req)}${relativeUrl}`;
+}
+
+function mediaContentType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return {
+    ".mp4": "video/mp4",
+    ".m4v": "video/mp4",
+    ".webm": "video/webm",
+    ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".ico": "image/x-icon"
+  }[ext] || "application/octet-stream";
+}
+
+function signCastUrl(videoId, expires) {
+  return crypto.createHmac("sha256", CAST_SECRET).update(`${videoId}:${expires}`).digest("hex");
+}
+
+function verifyCastUrl(videoId, expires, sig) {
+  if (!videoId || !expires || !sig || Date.now() > Number(expires)) return false;
+  const expected = signCastUrl(videoId, expires);
+  if (sig.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
 }
 
 function parseCookies(req) {
@@ -264,6 +302,7 @@ async function scanLibrary() {
       url: `/media/${encodeURIComponent(relativePath)}`,
       watchUrl: `/watch.html?v=${encodeURIComponent(id)}`,
       thumbnail,
+      contentType: mediaContentType(filePath),
       size: stats.size,
       modifiedAt: stats.mtime.toISOString()
     };
@@ -379,18 +418,7 @@ async function streamMedia(req, res, relativePath) {
     return sendText(res, 404, "Media not found");
   }
 
-  const ext = path.extname(filePath).toLowerCase();
-  const contentType = {
-    ".mp4": "video/mp4",
-    ".m4v": "video/mp4",
-    ".webm": "video/webm",
-    ".mkv": "video/x-matroska",
-    ".mov": "video/quicktime",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp"
-  }[ext] || "application/octet-stream";
+  const contentType = mediaContentType(filePath);
 
   const range = req.headers.range;
   if (!range) {
@@ -442,7 +470,8 @@ async function serveStatic(res, pathname) {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
-    ".svg": "image/svg+xml"
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon"
   }[ext] || "application/octet-stream";
 
   res.writeHead(200, { "content-type": contentType });
@@ -495,6 +524,23 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === "/api/library") return sendJson(res, 200, library);
+
+  if (url.pathname.startsWith("/api/cast/")) {
+    const id = safeDecode(url.pathname.slice("/api/cast/".length));
+    const video = library.videos.find((item) => item.id === id);
+    if (!video) return sendJson(res, 404, { error: "Video not found" });
+
+    const expires = Date.now() + 6 * 60 * 60 * 1000;
+    const sig = signCastUrl(video.id, expires);
+    const relativeMediaUrl = `/cast-media/${encodeURIComponent(video.id)}?expires=${expires}&sig=${sig}`;
+    return sendJson(res, 200, {
+      mediaUrl: absoluteUrl(req, relativeMediaUrl),
+      title: video.title,
+      channel: video.channel,
+      contentType: video.contentType,
+      thumbnail: video.thumbnail ? absoluteUrl(req, video.thumbnail) : null
+    });
+  }
 
   if (url.pathname === "/api/users") {
     if (!requireAdmin(req, res)) return;
@@ -612,6 +658,15 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/media/")) {
       if (!getSession(req)) return sendText(res, 401, "Authentication required");
       return await streamMedia(req, res, safeDecode(url.pathname.slice("/media/".length)));
+    }
+
+    if (url.pathname.startsWith("/cast-media/")) {
+      const id = safeDecode(url.pathname.slice("/cast-media/".length));
+      const video = library.videos.find((item) => item.id === id);
+      if (!video || !verifyCastUrl(id, url.searchParams.get("expires"), url.searchParams.get("sig"))) {
+        return sendText(res, 403, "Cast URL expired");
+      }
+      return await streamMedia(req, res, video.path);
     }
 
     return await serveStatic(res, url.pathname);

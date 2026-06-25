@@ -57,6 +57,7 @@ Set an initial admin account:
 environment:
   ADMIN_USERNAME: admin
   ADMIN_PASSWORD: change-me
+  CAST_SECRET: change-this-too
   AUTH_ENABLED: "true"
 ```
 
@@ -70,3 +71,14 @@ volumes:
 Channel subscriptions periodically submit saved channel or playlist URLs to MeTube.
 
 Retention cleanup only deletes files when `ALLOW_DELETE=true` and the media folder is mounted read-write.
+
+## Chromecast
+
+Set `PUBLIC_URL` to the LAN URL Chromecast devices can reach:
+
+```yaml
+environment:
+  PUBLIC_URL: http://TRUENAS-IP:3020
+```
+
+Use WebM or MP4 files for best playback support.
