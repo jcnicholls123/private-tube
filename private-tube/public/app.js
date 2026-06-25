@@ -78,24 +78,24 @@ async function api(path, options = {}) {
 
 function showLogin() {
   if (!state.session.authEnabled) return;
-  setupOverlay.hidden = true;
-  loginOverlay.hidden = false;
+  if (setupOverlay) setupOverlay.hidden = true;
+  if (loginOverlay) loginOverlay.hidden = false;
 }
 
 function hideLogin() {
-  loginOverlay.hidden = true;
-  loginStatus.textContent = "";
+  if (loginOverlay) loginOverlay.hidden = true;
+  if (loginStatus) loginStatus.textContent = "";
 }
 
 function showSetup() {
-  loginOverlay.hidden = true;
-  setupOverlay.hidden = false;
+  if (loginOverlay) loginOverlay.hidden = true;
+  if (setupOverlay) setupOverlay.hidden = false;
   verifySetupStillRequired();
 }
 
 function hideSetup() {
-  setupOverlay.hidden = true;
-  setupStatus.textContent = "";
+  if (setupOverlay) setupOverlay.hidden = true;
+  if (setupStatus) setupStatus.textContent = "";
 }
 
 async function verifySetupStillRequired() {
@@ -105,10 +105,10 @@ async function verifySetupStillRequired() {
     if (!session.setupRequired) {
       hideSetup();
       showLogin();
-      loginStatus.textContent = "Setup is complete. Sign in with your admin account.";
+      if (loginStatus) loginStatus.textContent = "Setup is complete. Sign in with your admin account.";
     }
   } catch (error) {
-    setupStatus.textContent = error.message;
+    if (setupStatus) setupStatus.textContent = error.message;
   }
 }
 
@@ -485,7 +485,7 @@ addForm.addEventListener("submit", async (event) => {
   }
 });
 
-loginForm.addEventListener("submit", async (event) => {
+loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   loginStatus.textContent = "Signing in...";
   try {
@@ -499,11 +499,11 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
-setupForm.addEventListener("submit", async (event) => {
+setupForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const submitButton = setupForm.querySelector("button");
-  submitButton.disabled = true;
-  setupStatus.textContent = "Creating admin...";
+  if (submitButton) submitButton.disabled = true;
+  if (setupStatus) setupStatus.textContent = "Creating admin...";
   try {
     await api("/api/setup", {
       method: "POST",
@@ -520,22 +520,22 @@ setupForm.addEventListener("submit", async (event) => {
       state.session = await api("/api/session");
       hideSetup();
       showLogin();
-      loginStatus.textContent = "Setup is complete. Sign in with your admin account.";
+      if (loginStatus) loginStatus.textContent = "Setup is complete. Sign in with your admin account.";
       return;
     }
-    setupStatus.textContent = error.message;
+    if (setupStatus) setupStatus.textContent = error.message;
   } finally {
-    submitButton.disabled = false;
+    if (submitButton) submitButton.disabled = false;
   }
 });
 
-setupLoginButton.addEventListener("click", async () => {
+setupLoginButton?.addEventListener("click", async () => {
   state.session = await api("/api/session");
   hideSetup();
   showLogin();
 });
 
-logoutButton.addEventListener("click", async () => {
+logoutButton?.addEventListener("click", async () => {
   await api("/api/logout", { method: "POST" });
   location.reload();
 });
