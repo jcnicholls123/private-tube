@@ -223,7 +223,12 @@ function selectFilter(filter, channelId = "") {
 }
 
 function renderChannels() {
-  channelStrip.hidden = state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
+  channelStrip.hidden = state.filter === "channels" || state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
+  if (channelStrip.hidden) {
+    channelStrip.innerHTML = "";
+    return;
+  }
+
   channelStrip.innerHTML = state.library.channels
     .map((channel) => `
       <button class="channel-pill ${state.channelId === channel.id ? "active" : ""}" type="button" data-channel="${channel.id}">

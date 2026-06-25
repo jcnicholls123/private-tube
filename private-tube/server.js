@@ -332,6 +332,13 @@ function getSubscription(id) {
   return item ? { ...item, enabled: Boolean(item.enabled) } : null;
 }
 
+function getSubscriptionByUrl(url) {
+  const item = get(`SELECT id, name, url, quality, interval_hours AS intervalHours, retention_days AS retentionDays,
+    enabled, created_at AS createdAt, last_run_at AS lastRunAt, last_status AS lastStatus
+    FROM subscriptions WHERE url = ?`, [url]);
+  return item ? { ...item, enabled: Boolean(item.enabled) } : null;
+}
+
 function insertSubscription(subscription) {
   run(`INSERT INTO subscriptions
     (id, name, url, quality, interval_hours, retention_days, enabled, created_at, last_run_at, last_status)
@@ -552,6 +559,53 @@ function titleFromFile(filePath) {
     .replace(/\s+/g, " ")
     .replace(/^\d{4}-\d{2}-\d{2}\s*[- ]\s*/, "")
     .trim();
+}
+
+function youtubeChannelNameFromUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    const host = url.hostname.replace(/^www\./, "");
+    if (!["youtube.com", "m.youtube.com", "youtu.be"].includes(host)) return "";
+    const parts = url.pathname.split("/").filter(Boolean);
+    const first = parts[0] || "";
+    if (first.startsWith("@")) return decodeURIComponent(first.slice(1));
+    if (["c", "user"].includes(first) && parts[1]) return decodeURIComponent(parts[1]);
+    if (first === "channel" && parts[1]) return decodeURIComponent(parts[1]);
+    if (first === "playlist" && url.searchParams.has("list")) return `Playlist ${url.searchParams.get("list")}`;
+  } catch {}
+  return "";
+}
+
+function isYouTubeCollectionUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    const host = url.hostname.replace(/^www\./, "");
+    if (!["youtube.com", "m.youtube.com"].includes(host)) return false;
+    const parts = url.pathname.split("/").filter(Boolean);
+    return parts[0]?.startsWith("@") || ["channel", "c", "user", "playlist"].includes(parts[0]);
+  } catch {
+    return false;
+  }
+}
+
+function ensureSubscriptionForUrl(rawUrl, quality = "auto") {
+  const url = String(rawUrl || "").trim();
+  if (!url || !isYouTubeCollectionUrl(url) || getSubscriptionByUrl(url)) return null;
+  const name = youtubeChannelNameFromUrl(url) || "YouTube channel";
+  const subscription = {
+    id: crypto.randomUUID(),
+    name,
+    url,
+    quality,
+    intervalHours: 24,
+    retentionDays: 0,
+    enabled: true,
+    createdAt: new Date().toISOString(),
+    lastRunAt: null,
+    lastStatus: "added from URL"
+  };
+  insertSubscription(subscription);
+  return subscription;
 }
 
 function normalizeUploadDate(value) {
@@ -1266,8 +1320,10 @@ async function handleApi(req, res, url) {
     try {
       const payload = await readBody(req);
       if (!payload.url) return sendJson(res, 400, { error: "Missing url" });
+      const subscription = ensureSubscriptionForUrl(payload.url, payload.quality || "auto");
       const result = await addToMetube(payload.url, payload.quality || "auto", "manual");
-      return sendJson(res, result.ok ? 200 : 502, result);
+      if (subscription) await scanLibrary();
+      return sendJson(res, result.ok ? 200 : 502, { ...result, subscription });
     } catch (error) {
       return sendJson(res, 500, { error: error.message });
     }
