@@ -20,6 +20,7 @@ const rescanButton = document.querySelector("#rescanButton");
 const addForm = document.querySelector("#addForm");
 const urlInput = document.querySelector("#urlInput");
 const qualitySelect = document.querySelector("#qualitySelect");
+const qualityInfo = document.querySelector("#qualityInfo");
 const addStatus = document.querySelector("#addStatus");
 const adminPanel = document.querySelector("#adminPanel");
 const logoutButton = document.querySelector("#logoutButton");
@@ -84,10 +85,29 @@ function thumbnail(video) {
   return `<div class="thumb-fallback"><span>Play</span></div>`;
 }
 
+function qualityPreset(id) {
+  return state.config.qualityPresets.find((quality) => quality.id === id);
+}
+
+function qualityLabel(id) {
+  return qualityPreset(id)?.label || id || "Auto";
+}
+
+function qualityDescription(id) {
+  return qualityPreset(id)?.description || "";
+}
+
+function renderQualityInfo() {
+  if (!qualityInfo) return;
+  qualityInfo.textContent = qualityDescription(qualitySelect.value);
+}
+
 function renderQualityOptions() {
   qualitySelect.innerHTML = state.config.qualityPresets
-    .map((quality) => `<option value="${quality.id}">${quality.label}</option>`)
+    .map((quality) => `<option value="${quality.id}" title="${quality.description || ""}">${quality.label}</option>`)
     .join("");
+  if (!qualitySelect.value && qualityPreset("auto")) qualitySelect.value = "auto";
+  renderQualityInfo();
 }
 
 function renderChannels() {
@@ -182,7 +202,7 @@ function renderSubscriptions() {
   adminPanel.hidden = false;
 
   const qualityOptions = state.config.qualityPresets
-    .map((quality) => `<option value="${quality.id}">${quality.label}</option>`)
+    .map((quality) => `<option value="${quality.id}" title="${quality.description || ""}">${quality.label}</option>`)
     .join("");
 
   adminPanel.innerHTML = `
@@ -194,6 +214,7 @@ function renderSubscriptions() {
       <input name="retentionDays" type="number" min="0" value="0" aria-label="Retention days">
       <button type="submit">Add channel</button>
     </form>
+    <p class="form-help">Auto lets MeTube/yt-dlp pick the best available quality. Pick a cap if you want smaller files.</p>
     <button id="retentionButton" class="secondary-button" type="button">Run retention cleanup</button>
     <div class="settings-list">
       ${state.subscriptions.map((item) => `
@@ -201,7 +222,7 @@ function renderSubscriptions() {
           <div>
             <strong>${item.name}</strong>
             <p>${item.url}</p>
-            <p>Quality: ${item.quality || "best"} · Every ${item.intervalHours || 24}h · Retention: ${item.retentionDays || 0} days · Last: ${formatDate(item.lastRunAt)} · ${item.lastStatus || "new"}</p>
+            <p>Quality: ${qualityLabel(item.quality || "auto")} · Every ${item.intervalHours || 24}h · Retention: ${item.retentionDays || 0} days · Last: ${formatDate(item.lastRunAt)} · ${item.lastStatus || "new"}</p>
           </div>
           <div class="row-actions">
             <button type="button" data-run="${item.id}">Run</button>
@@ -425,6 +446,8 @@ searchInput.addEventListener("input", () => {
   history.replaceState(null, "", nextUrl);
   render();
 });
+
+qualitySelect.addEventListener("change", renderQualityInfo);
 
 rescanButton.addEventListener("click", async () => {
   rescanButton.disabled = true;

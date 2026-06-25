@@ -26,13 +26,46 @@ const THUMBNAIL_TIME = process.env.THUMBNAIL_TIME || "00:00:05";
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi"]);
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 const QUALITY_PRESETS = [
-  { id: "best", label: "Best available" },
-  { id: "2160", label: "2160p" },
-  { id: "1440", label: "1440p" },
-  { id: "1080", label: "1080p" },
-  { id: "720", label: "720p" },
-  { id: "480", label: "480p" },
-  { id: "audio", label: "Audio only" }
+  {
+    id: "auto",
+    label: "Auto (recommended)",
+    description: "Lets MeTube/yt-dlp choose the best available quality. Use this for most videos."
+  },
+  {
+    id: "best",
+    label: "Best available",
+    description: "Requests the highest quality MeTube can find. This can create larger files."
+  },
+  {
+    id: "2160",
+    label: "Up to 2160p",
+    description: "Caps downloads at 4K when available, falling back to lower quality when needed."
+  },
+  {
+    id: "1440",
+    label: "Up to 1440p",
+    description: "Caps downloads at 1440p, with automatic fallback if the source is lower."
+  },
+  {
+    id: "1080",
+    label: "Up to 1080p",
+    description: "Good quality without the storage hit of 4K downloads."
+  },
+  {
+    id: "720",
+    label: "Up to 720p",
+    description: "Smaller files that still look decent on phones, tablets, and smaller TVs."
+  },
+  {
+    id: "480",
+    label: "Up to 480p",
+    description: "Low storage use for videos where quality matters less."
+  },
+  {
+    id: "audio",
+    label: "Audio only",
+    description: "Downloads audio without video."
+  }
 ];
 
 let library = {
@@ -287,7 +320,7 @@ function insertSubscription(subscription) {
     subscription.id,
     subscription.name,
     subscription.url,
-    subscription.quality || "best",
+    subscription.quality || "auto",
     Number(subscription.intervalHours || 24),
     Number(subscription.retentionDays || 0),
     subscription.enabled === false ? 0 : 1,
@@ -593,11 +626,11 @@ async function clearGeneratedThumbnails() {
 
 function qualityPayload(quality) {
   if (quality === "audio") return { quality: "audio" };
-  if (quality && quality !== "best") return { quality };
+  if (quality && quality !== "auto" && quality !== "best") return { quality };
   return { quality: "best" };
 }
 
-async function addToMetube(url, quality = "best") {
+async function addToMetube(url, quality = "auto") {
   const metubeUrl = getAppSetting("metube_url");
   if (!metubeUrl) throw new Error("MeTube URL is not configured");
   const response = await fetch(`${metubeUrl}/add`, {
@@ -616,7 +649,7 @@ async function runSubscription(subscription, force = false) {
     return;
   }
 
-  const result = await addToMetube(subscription.url, subscription.quality || "best");
+  const result = await addToMetube(subscription.url, subscription.quality || "auto");
   subscription.lastRunAt = new Date().toISOString();
   subscription.lastStatus = result.ok ? "queued" : `failed ${result.status}`;
   updateSubscriptionRun(subscription);

@@ -81,6 +81,12 @@ Channel subscriptions periodically submit saved channel or playlist URLs to MeTu
 
 Retention cleanup only deletes files when `ALLOW_DELETE=true` and the media folder is mounted read-write.
 
+## Quality
+
+Auto is the recommended default. It asks MeTube/yt-dlp for the best available quality and lets MeTube handle fallback when a source does not have that format.
+
+Use a capped option like 1080p or 720p when you want smaller files. For a WebM-only library, keep your MeTube download/output settings set to WebM; PrivateTube sends the quality request and then indexes whatever MeTube saves.
+
 ## Chromecast
 
 By default, PrivateTube uses the address you opened it with. If Chromecast needs a different LAN URL, set it in the in-app Settings page.

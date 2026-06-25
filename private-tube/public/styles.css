@@ -214,6 +214,12 @@ input {
   font-size: 13px;
 }
 
+.add-panel .quality-info {
+  min-height: 32px;
+  margin: 8px 0 0;
+  line-height: 1.35;
+}
+
 .add-panel select {
   width: 100%;
   margin-top: 8px;
@@ -371,6 +377,12 @@ input {
 .settings-form input,
 .settings-form select {
   min-width: 0;
+}
+
+.form-help {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .settings-list {
