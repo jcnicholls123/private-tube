@@ -48,3 +48,25 @@ Set `METUBE_URL` to allow the sidebar form to submit URLs to MeTube:
 environment:
   METUBE_URL: http://TRUENAS-IP:30094
 ```
+
+## Users and Subscriptions
+
+Set an initial admin account:
+
+```yaml
+environment:
+  ADMIN_USERNAME: admin
+  ADMIN_PASSWORD: change-me
+  AUTH_ENABLED: "true"
+```
+
+Mount `/data` so local users and subscriptions survive container updates:
+
+```yaml
+volumes:
+  - /mnt/Media/apps/private-tube:/data
+```
+
+Channel subscriptions periodically submit saved channel or playlist URLs to MeTube.
+
+Retention cleanup only deletes files when `ALLOW_DELETE=true` and the media folder is mounted read-write.

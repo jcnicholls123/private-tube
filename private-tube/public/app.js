@@ -1,6 +1,9 @@
 const state = {
+  session: { authenticated: false, authEnabled: false, user: null },
   library: { videos: [], channels: [] },
-  config: { metubeEnabled: false },
+  config: { metubeEnabled: false, qualityPresets: [] },
+  subscriptions: [],
+  users: [],
   filter: "all",
   query: "",
   channelId: ""
@@ -15,16 +18,54 @@ const searchInput = document.querySelector("#searchInput");
 const rescanButton = document.querySelector("#rescanButton");
 const addForm = document.querySelector("#addForm");
 const urlInput = document.querySelector("#urlInput");
+const qualitySelect = document.querySelector("#qualitySelect");
 const addStatus = document.querySelector("#addStatus");
+const adminPanel = document.querySelector("#adminPanel");
+const loginOverlay = document.querySelector("#loginOverlay");
+const loginForm = document.querySelector("#loginForm");
+const loginUsername = document.querySelector("#loginUsername");
+const loginPassword = document.querySelector("#loginPassword");
+const loginStatus = document.querySelector("#loginStatus");
+const logoutButton = document.querySelector("#logoutButton");
 const initialParams = new URLSearchParams(location.search);
 
 state.query = initialParams.get("q") || "";
 state.channelId = initialParams.get("channel") || "";
 if (state.channelId) state.filter = "channel";
-if (searchInput) searchInput.value = state.query;
+searchInput.value = state.query;
+
+function isAdmin() {
+  return state.session.user?.role === "admin";
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "content-type": "application/json", ...(options.headers || {}) },
+    ...options
+  });
+
+  if (response.status === 401) {
+    showLogin();
+    throw new Error("Authentication required");
+  }
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Request failed");
+  return result;
+}
+
+function showLogin() {
+  if (!state.session.authEnabled) return;
+  loginOverlay.hidden = false;
+}
+
+function hideLogin() {
+  loginOverlay.hidden = true;
+  loginStatus.textContent = "";
+}
 
 function formatDate(value) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
+  return value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value)) : "Never";
 }
 
 function formatSize(bytes) {
@@ -40,13 +81,18 @@ function formatSize(bytes) {
 }
 
 function thumbnail(video) {
-  if (video.thumbnail) {
-    return `<img src="${video.thumbnail}" alt="">`;
-  }
-  return `<div class="thumb-fallback"><span>▶</span></div>`;
+  if (video.thumbnail) return `<img src="${video.thumbnail}" alt="">`;
+  return `<div class="thumb-fallback"><span>Play</span></div>`;
+}
+
+function renderQualityOptions() {
+  qualitySelect.innerHTML = state.config.qualityPresets
+    .map((quality) => `<option value="${quality.id}">${quality.label}</option>`)
+    .join("");
 }
 
 function renderChannels() {
+  channelStrip.hidden = state.filter === "subscriptions" || state.filter === "users";
   channelStrip.innerHTML = state.library.channels
     .map((channel) => `
       <button class="channel-pill ${state.channelId === channel.id ? "active" : ""}" type="button" data-channel="${channel.id}">
@@ -74,9 +120,7 @@ function filteredVideos() {
     videos = videos.filter((video) => video.channelId === state.channelId);
   }
 
-  if (state.filter === "recent") {
-    videos = videos.slice(0, 24);
-  }
+  if (state.filter === "recent") videos = videos.slice(0, 24);
 
   if (state.query.trim()) {
     const query = state.query.toLowerCase();
@@ -89,11 +133,10 @@ function filteredVideos() {
 }
 
 function renderVideos(videos) {
+  grid.hidden = state.filter === "subscriptions" || state.filter === "users";
   grid.innerHTML = videos.map((video) => `
     <article class="video-card">
-      <a class="thumb" href="${video.watchUrl}">
-        ${thumbnail(video)}
-      </a>
+      <a class="thumb" href="${video.watchUrl}">${thumbnail(video)}</a>
       <div class="video-copy">
         <a class="video-title" href="${video.watchUrl}">${video.title}</a>
         <button class="channel-name" type="button" data-channel="${video.channelId}">${video.channel}</button>
@@ -113,50 +156,195 @@ function renderVideos(videos) {
 }
 
 function renderTitle(videos) {
-  if (state.filter === "channel" && state.channelId) {
+  if (state.filter === "subscriptions") {
+    viewTitle.textContent = "Subscriptions";
+    viewMeta.textContent = `${state.subscriptions.length} channel${state.subscriptions.length === 1 ? "" : "s"}`;
+  } else if (state.filter === "users") {
+    viewTitle.textContent = "Users";
+    viewMeta.textContent = `${state.users.length} account${state.users.length === 1 ? "" : "s"}`;
+  } else if (state.filter === "channel" && state.channelId) {
     const channel = state.library.channels.find((item) => item.id === state.channelId);
     viewTitle.textContent = channel ? channel.name : "Channel";
+    viewMeta.textContent = `${videos.length} video${videos.length === 1 ? "" : "s"}`;
   } else if (state.filter === "recent") {
     viewTitle.textContent = "Latest";
-  } else if (state.filter === "channels") {
-    viewTitle.textContent = "Channels";
+    viewMeta.textContent = `${videos.length} video${videos.length === 1 ? "" : "s"}`;
   } else {
     viewTitle.textContent = state.query ? "Search" : "Home";
+    viewMeta.textContent = `${videos.length} video${videos.length === 1 ? "" : "s"}`;
   }
-  viewMeta.textContent = `${videos.length} video${videos.length === 1 ? "" : "s"}`;
 }
 
-function render() {
-  renderChannels();
-  const videos = filteredVideos();
-  renderTitle(videos);
-  renderVideos(videos);
-  emptyState.hidden = videos.length > 0;
+function renderSubscriptions() {
+  adminPanel.hidden = state.filter !== "subscriptions";
+  if (state.filter !== "subscriptions") return;
+
+  const qualityOptions = state.config.qualityPresets
+    .map((quality) => `<option value="${quality.id}">${quality.label}</option>`)
+    .join("");
+
+  adminPanel.innerHTML = `
+    <form id="subscriptionForm" class="settings-form">
+      <input name="name" placeholder="Channel name" required>
+      <input name="url" type="url" placeholder="Channel or playlist URL" required>
+      <select name="quality">${qualityOptions}</select>
+      <input name="intervalHours" type="number" min="1" value="24" aria-label="Check every hours">
+      <input name="retentionDays" type="number" min="0" value="0" aria-label="Retention days">
+      <button type="submit">Add channel</button>
+    </form>
+    <button id="retentionButton" class="secondary-button" type="button">Run retention cleanup</button>
+    <div class="settings-list">
+      ${state.subscriptions.map((item) => `
+        <article class="settings-row">
+          <div>
+            <strong>${item.name}</strong>
+            <p>${item.url}</p>
+            <p>Quality: ${item.quality || "best"} · Every ${item.intervalHours || 24}h · Retention: ${item.retentionDays || 0} days · Last: ${formatDate(item.lastRunAt)} · ${item.lastStatus || "new"}</p>
+          </div>
+          <div class="row-actions">
+            <button type="button" data-run="${item.id}">Run</button>
+            <button type="button" data-delete="${item.id}">Delete</button>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+
+  document.querySelector("#subscriptionForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    data.intervalHours = Number(data.intervalHours);
+    data.retentionDays = Number(data.retentionDays);
+    await api("/api/subscriptions", { method: "POST", body: JSON.stringify(data) });
+    await loadAdminData();
+    render();
+  });
+
+  document.querySelector("#retentionButton").addEventListener("click", async () => {
+    const result = await api("/api/retention/run", { method: "POST" });
+    alert(result.enabled ? `Deleted ${result.deleted} old video(s).` : "Retention deletion is disabled.");
+    await loadLibrary();
+  });
+
+  adminPanel.querySelectorAll("[data-run]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await api(`/api/subscriptions/${button.dataset.run}/run`, { method: "POST" });
+      await loadAdminData();
+      render();
+    });
+  });
+
+  adminPanel.querySelectorAll("[data-delete]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await api(`/api/subscriptions/${button.dataset.delete}`, { method: "DELETE" });
+      await loadAdminData();
+      render();
+    });
+  });
 }
 
-async function loadLibrary() {
-  const [configResponse, libraryResponse] = await Promise.all([
-    fetch("/api/config"),
-    fetch("/api/library")
-  ]);
-  state.config = await configResponse.json();
-  state.library = await libraryResponse.json();
-  renderAddPanel();
-  render();
+function renderUsers() {
+  adminPanel.hidden = state.filter !== "users";
+  if (state.filter !== "users") return;
+
+  adminPanel.innerHTML = `
+    <form id="userForm" class="settings-form">
+      <input name="username" placeholder="Username" required>
+      <input name="password" type="password" placeholder="Password" required>
+      <select name="role">
+        <option value="viewer">Viewer</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button type="submit">Add user</button>
+    </form>
+    <div class="settings-list">
+      ${state.users.map((user) => `
+        <article class="settings-row">
+          <div>
+            <strong>${user.username}</strong>
+            <p>${user.role} · Created ${formatDate(user.createdAt)}</p>
+          </div>
+          <div class="row-actions">
+            <button type="button" data-delete-user="${user.username}">Delete</button>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+
+  document.querySelector("#userForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    await api("/api/users", { method: "POST", body: JSON.stringify(data) });
+    await loadAdminData();
+    render();
+  });
+
+  adminPanel.querySelectorAll("[data-delete-user]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await api(`/api/users/${encodeURIComponent(button.dataset.deleteUser)}`, { method: "DELETE" });
+      await loadAdminData();
+      render();
+    });
+  });
 }
 
 function renderAddPanel() {
+  document.querySelectorAll(".admin-only").forEach((item) => {
+    item.hidden = !isAdmin();
+  });
+
   if (state.config.metubeEnabled) {
-    addForm.hidden = false;
     urlInput.disabled = false;
+    qualitySelect.disabled = false;
     addForm.querySelector("button").disabled = false;
     addStatus.textContent = "";
     return;
   }
 
   urlInput.disabled = true;
+  qualitySelect.disabled = true;
   addForm.querySelector("button").disabled = true;
   addStatus.textContent = "Set METUBE_URL to enable downloads";
+}
+
+function render() {
+  const videos = filteredVideos();
+  renderChannels();
+  renderTitle(videos);
+  renderVideos(videos);
+  renderSubscriptions();
+  renderUsers();
+  emptyState.hidden = videos.length > 0 || state.filter === "subscriptions" || state.filter === "users";
+}
+
+async function loadAdminData() {
+  if (!isAdmin()) return;
+  const [subscriptions, users] = await Promise.all([
+    api("/api/subscriptions"),
+    api("/api/users")
+  ]);
+  state.subscriptions = subscriptions.subscriptions;
+  state.users = users.users;
+}
+
+async function loadLibrary() {
+  state.config = await api("/api/config");
+  renderQualityOptions();
+  state.library = await api("/api/library");
+  await loadAdminData();
+  renderAddPanel();
+  render();
+}
+
+async function boot() {
+  state.session = await api("/api/session");
+  if (state.session.authEnabled && !state.session.authenticated) {
+    showLogin();
+    return;
+  }
+  hideLogin();
+  await loadLibrary();
 }
 
 document.querySelectorAll(".nav-item").forEach((button) => {
@@ -179,7 +367,7 @@ searchInput.addEventListener("input", () => {
 
 rescanButton.addEventListener("click", async () => {
   rescanButton.disabled = true;
-  await fetch("/api/rescan", { method: "POST" });
+  await api("/api/rescan", { method: "POST" });
   await loadLibrary();
   rescanButton.disabled = false;
 });
@@ -187,14 +375,35 @@ rescanButton.addEventListener("click", async () => {
 addForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   addStatus.textContent = "Sending...";
-  const response = await fetch("/api/add", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ url: urlInput.value })
-  });
-  const result = await response.json();
-  addStatus.textContent = result.ok ? "Added to MeTube" : result.error || "Could not add video";
-  if (result.ok) urlInput.value = "";
+  try {
+    const result = await api("/api/add", {
+      method: "POST",
+      body: JSON.stringify({ url: urlInput.value, quality: qualitySelect.value })
+    });
+    addStatus.textContent = result.ok ? "Added to MeTube" : "Could not add video";
+    if (result.ok) urlInput.value = "";
+  } catch (error) {
+    addStatus.textContent = error.message;
+  }
 });
 
-loadLibrary();
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  loginStatus.textContent = "Signing in...";
+  try {
+    await api("/api/login", {
+      method: "POST",
+      body: JSON.stringify({ username: loginUsername.value, password: loginPassword.value })
+    });
+    await boot();
+  } catch (error) {
+    loginStatus.textContent = error.message;
+  }
+});
+
+logoutButton.addEventListener("click", async () => {
+  await api("/api/logout", { method: "POST" });
+  location.reload();
+});
+
+boot();

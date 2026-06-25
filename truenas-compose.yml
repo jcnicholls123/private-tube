@@ -8,9 +8,17 @@ services:
     environment:
       PORT: "3020"
       MEDIA_DIR: /media
+      DATA_DIR: /data
       # Change this to your MeTube WebUI URL.
       METUBE_URL: http://TRUENAS-IP:30094
+      # Change these before exposing the app to your network.
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: change-me
+      AUTH_ENABLED: "true"
+      # Set to "true" only if you want retention rules to delete local files.
+      ALLOW_DELETE: "false"
     volumes:
       # Change this to the dataset where MeTube/Pinchflat saves videos.
       - /mnt/Media/downloads/YouTube:/media:ro
-
+      # Change this to a persistent app config dataset.
+      - /mnt/Media/apps/private-tube:/data

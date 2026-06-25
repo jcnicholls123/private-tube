@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { createReadStream, promises as fs } from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -6,17 +7,37 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3020);
 const MEDIA_DIR = path.resolve(process.env.MEDIA_DIR || path.join(__dirname, "media"));
+const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, "data"));
 const METUBE_URL = (process.env.METUBE_URL || "").replace(/\/$/, "");
 const SCAN_INTERVAL_MS = Number(process.env.SCAN_INTERVAL_MS || 5 * 60 * 1000);
+const CHANNEL_CHECK_INTERVAL_MS = Number(process.env.CHANNEL_CHECK_INTERVAL_MS || 15 * 60 * 1000);
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+const AUTH_ENABLED = process.env.AUTH_ENABLED !== "false" && Boolean(ADMIN_USERNAME && ADMIN_PASSWORD);
+const ALLOW_DELETE = process.env.ALLOW_DELETE === "true";
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi"]);
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+const QUALITY_PRESETS = [
+  { id: "best", label: "Best available" },
+  { id: "2160", label: "2160p" },
+  { id: "1440", label: "1440p" },
+  { id: "1080", label: "1080p" },
+  { id: "720", label: "720p" },
+  { id: "480", label: "480p" },
+  { id: "audio", label: "Audio only" }
+];
 
 let library = {
   generatedAt: null,
   videos: [],
   channels: []
 };
+let store = {
+  users: [],
+  subscriptions: []
+};
+const sessions = new Map();
 
 function sendJson(res, statusCode, body) {
   const json = JSON.stringify(body);
@@ -30,6 +51,122 @@ function sendJson(res, statusCode, body) {
 function sendText(res, statusCode, body) {
   res.writeHead(statusCode, { "content-type": "text/plain; charset=utf-8" });
   res.end(body);
+}
+
+function parseCookies(req) {
+  return Object.fromEntries((req.headers.cookie || "").split(";").filter(Boolean).map((part) => {
+    const [key, ...value] = part.trim().split("=");
+    return [key, decodeURIComponent(value.join("="))];
+  }));
+}
+
+function setSessionCookie(res, token) {
+  res.setHeader("set-cookie", `pt_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`);
+}
+
+function clearSessionCookie(res) {
+  res.setHeader("set-cookie", "pt_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
+}
+
+function getSession(req) {
+  if (!AUTH_ENABLED) return { username: "local", role: "admin" };
+  const token = parseCookies(req).pt_session;
+  if (!token) return null;
+  return sessions.get(token) || null;
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = crypto.pbkdf2Sync(password, salt, 120000, 32, "sha256").toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, encoded) {
+  const [salt, expected] = encoded.split(":");
+  if (!salt || !expected) return false;
+  const actual = hashPassword(password, salt).split(":")[1];
+  return crypto.timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(expected, "hex"));
+}
+
+function publicUser(user) {
+  return {
+    username: user.username,
+    role: user.role || "viewer",
+    createdAt: user.createdAt
+  };
+}
+
+async function readJson(filePath, fallback) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeJson(filePath, value) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function storePath() {
+  return path.join(DATA_DIR, "private-tube.json");
+}
+
+async function loadStore() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  store = await readJson(storePath(), { users: [], subscriptions: [] });
+  store.users ||= [];
+  store.subscriptions ||= [];
+
+  if (AUTH_ENABLED && !store.users.some((user) => user.username === ADMIN_USERNAME)) {
+    store.users.unshift({
+      username: ADMIN_USERNAME,
+      role: "admin",
+      passwordHash: hashPassword(ADMIN_PASSWORD),
+      createdAt: new Date().toISOString()
+    });
+    await saveStore();
+  }
+}
+
+async function saveStore() {
+  await writeJson(storePath(), store);
+}
+
+async function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 1024 * 256) {
+        reject(new Error("Request body too large"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(body || "{}"));
+      } catch {
+        reject(new Error("Invalid JSON"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function requireAuth(req, res) {
+  const session = getSession(req);
+  if (session) return session;
+  sendJson(res, 401, { error: "Authentication required" });
+  return null;
+}
+
+function requireAdmin(req, res) {
+  const session = requireAuth(req, res);
+  if (!session) return null;
+  if (session.role === "admin") return session;
+  sendJson(res, 403, { error: "Admin access required" });
+  return null;
 }
 
 function safeDecode(value) {
@@ -154,8 +291,72 @@ async function scanLibrary() {
   };
 }
 
-function getVideoById(id) {
-  return library.videos.find((video) => video.id === id);
+function qualityPayload(quality) {
+  if (quality === "audio") return { quality: "audio" };
+  if (quality && quality !== "best") return { quality };
+  return { quality: "best" };
+}
+
+async function addToMetube(url, quality = "best") {
+  if (!METUBE_URL) throw new Error("METUBE_URL is not configured");
+  const response = await fetch(`${METUBE_URL}/add`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ url, ...qualityPayload(quality) })
+  });
+  return { ok: response.ok, status: response.status };
+}
+
+async function runSubscription(subscription, force = false) {
+  if (!METUBE_URL) return;
+  const now = Date.now();
+  const intervalMs = Math.max(1, Number(subscription.intervalHours || 24)) * 60 * 60 * 1000;
+  if (!force && subscription.lastRunAt && now - new Date(subscription.lastRunAt).getTime() < intervalMs) {
+    return;
+  }
+
+  const result = await addToMetube(subscription.url, subscription.quality || "best");
+  subscription.lastRunAt = new Date().toISOString();
+  subscription.lastStatus = result.ok ? "queued" : `failed ${result.status}`;
+  await saveStore();
+}
+
+async function runSubscriptions() {
+  for (const subscription of store.subscriptions) {
+    if (subscription.enabled === false) continue;
+    try {
+      await runSubscription(subscription);
+    } catch (error) {
+      subscription.lastRunAt = new Date().toISOString();
+      subscription.lastStatus = error.message;
+      await saveStore();
+    }
+  }
+}
+
+async function applyRetention() {
+  if (!ALLOW_DELETE) return { deleted: 0, enabled: false };
+  let deleted = 0;
+  const now = Date.now();
+
+  for (const subscription of store.subscriptions) {
+    const retentionDays = Number(subscription.retentionDays || 0);
+    if (!retentionDays) continue;
+    const channelSlug = slugify(subscription.name || "");
+    const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
+
+    for (const video of library.videos) {
+      if (channelSlug && video.channelId !== channelSlug) continue;
+      if (now - new Date(video.modifiedAt).getTime() < maxAgeMs) continue;
+      const fullPath = resolveMediaPath(video.path);
+      if (!fullPath) continue;
+      await fs.unlink(fullPath);
+      deleted += 1;
+    }
+  }
+
+  if (deleted) await scanLibrary();
+  return { deleted, enabled: true };
 }
 
 function resolveMediaPath(relativePath) {
@@ -249,14 +450,139 @@ async function serveStatic(res, pathname) {
 }
 
 async function handleApi(req, res, url) {
+  if (url.pathname === "/api/session") {
+    const session = getSession(req);
+    return sendJson(res, 200, {
+      authenticated: Boolean(session),
+      authEnabled: AUTH_ENABLED,
+      user: session
+    });
+  }
+
+  if (url.pathname === "/api/login" && req.method === "POST") {
+    if (!AUTH_ENABLED) return sendJson(res, 200, { ok: true });
+    const payload = await readBody(req);
+    const user = store.users.find((item) => item.username === payload.username);
+    if (!user || !verifyPassword(payload.password || "", user.passwordHash)) {
+      return sendJson(res, 401, { error: "Invalid username or password" });
+    }
+    const token = crypto.randomBytes(32).toString("base64url");
+    const session = { username: user.username, role: user.role || "viewer" };
+    sessions.set(token, session);
+    setSessionCookie(res, token);
+    return sendJson(res, 200, { ok: true, user: session });
+  }
+
+  if (url.pathname === "/api/logout" && req.method === "POST") {
+    const token = parseCookies(req).pt_session;
+    if (token) sessions.delete(token);
+    clearSessionCookie(res);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  const session = requireAuth(req, res);
+  if (!session) return;
+
   if (url.pathname === "/api/config") {
     return sendJson(res, 200, {
+      authEnabled: AUTH_ENABLED,
       metubeEnabled: Boolean(METUBE_URL),
-      metubeUrl: METUBE_URL
+      metubeUrl: METUBE_URL,
+      allowDelete: ALLOW_DELETE,
+      qualityPresets: QUALITY_PRESETS,
+      user: session
     });
   }
 
   if (url.pathname === "/api/library") return sendJson(res, 200, library);
+
+  if (url.pathname === "/api/users") {
+    if (!requireAdmin(req, res)) return;
+
+    if (req.method === "GET") {
+      return sendJson(res, 200, { users: store.users.map(publicUser) });
+    }
+
+    if (req.method === "POST") {
+      const payload = await readBody(req);
+      if (!payload.username || !payload.password) {
+        return sendJson(res, 400, { error: "Username and password are required" });
+      }
+      if (store.users.some((user) => user.username === payload.username)) {
+        return sendJson(res, 409, { error: "User already exists" });
+      }
+      store.users.push({
+        username: payload.username,
+        role: payload.role === "admin" ? "admin" : "viewer",
+        passwordHash: hashPassword(payload.password),
+        createdAt: new Date().toISOString()
+      });
+      await saveStore();
+      return sendJson(res, 201, { users: store.users.map(publicUser) });
+    }
+  }
+
+  if (url.pathname.startsWith("/api/users/") && req.method === "DELETE") {
+    if (!requireAdmin(req, res)) return;
+    const username = safeDecode(url.pathname.slice("/api/users/".length));
+    if (username === session.username) return sendJson(res, 400, { error: "You cannot delete yourself" });
+    store.users = store.users.filter((user) => user.username !== username);
+    await saveStore();
+    return sendJson(res, 200, { users: store.users.map(publicUser) });
+  }
+
+  if (url.pathname === "/api/subscriptions") {
+    if (req.method === "GET") return sendJson(res, 200, { subscriptions: store.subscriptions });
+    if (!requireAdmin(req, res)) return;
+
+    if (req.method === "POST") {
+      const payload = await readBody(req);
+      if (!payload.url || !payload.name) {
+        return sendJson(res, 400, { error: "Channel name and URL are required" });
+      }
+      const subscription = {
+        id: crypto.randomUUID(),
+        name: payload.name,
+        url: payload.url,
+        quality: payload.quality || "best",
+        intervalHours: Number(payload.intervalHours || 24),
+        retentionDays: Number(payload.retentionDays || 0),
+        enabled: payload.enabled !== false,
+        createdAt: new Date().toISOString(),
+        lastRunAt: null,
+        lastStatus: "new"
+      };
+      store.subscriptions.push(subscription);
+      await saveStore();
+      return sendJson(res, 201, { subscriptions: store.subscriptions });
+    }
+  }
+
+  if (url.pathname.startsWith("/api/subscriptions/")) {
+    if (!requireAdmin(req, res)) return;
+    const parts = url.pathname.slice("/api/subscriptions/".length).split("/");
+    const id = parts[0];
+    const action = parts[1];
+    const subscription = store.subscriptions.find((item) => item.id === id);
+    if (!subscription) return sendJson(res, 404, { error: "Subscription not found" });
+
+    if (req.method === "DELETE") {
+      store.subscriptions = store.subscriptions.filter((item) => item.id !== id);
+      await saveStore();
+      return sendJson(res, 200, { subscriptions: store.subscriptions });
+    }
+
+    if (req.method === "POST" && action === "run") {
+      await runSubscription(subscription, true);
+      return sendJson(res, 200, { subscription });
+    }
+  }
+
+  if (url.pathname === "/api/retention/run" && req.method === "POST") {
+    if (!requireAdmin(req, res)) return;
+    const result = await applyRetention();
+    return sendJson(res, 200, result);
+  }
 
   if (url.pathname === "/api/rescan" && req.method === "POST") {
     await scanLibrary();
@@ -264,33 +590,14 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === "/api/add" && req.method === "POST") {
-    if (!METUBE_URL) {
-      return sendJson(res, 400, { error: "METUBE_URL is not configured" });
+    try {
+      const payload = await readBody(req);
+      if (!payload.url) return sendJson(res, 400, { error: "Missing url" });
+      const result = await addToMetube(payload.url, payload.quality || "best");
+      return sendJson(res, result.ok ? 200 : 502, result);
+    } catch (error) {
+      return sendJson(res, 500, { error: error.message });
     }
-
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 1024 * 64) req.destroy();
-    });
-    req.on("end", async () => {
-      try {
-        const payload = JSON.parse(body || "{}");
-        if (!payload.url) return sendJson(res, 400, { error: "Missing url" });
-        const response = await fetch(`${METUBE_URL}/add`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ url: payload.url, quality: payload.quality || "best" })
-        });
-        return sendJson(res, response.ok ? 200 : 502, {
-          ok: response.ok,
-          status: response.status
-        });
-      } catch (error) {
-        return sendJson(res, 500, { error: error.message });
-      }
-    });
-    return;
   }
 
   sendJson(res, 404, { error: "API endpoint not found" });
@@ -303,6 +610,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url);
 
     if (url.pathname.startsWith("/media/")) {
+      if (!getSession(req)) return sendText(res, 401, "Authentication required");
       return await streamMedia(req, res, safeDecode(url.pathname.slice("/media/".length)));
     }
 
@@ -313,10 +621,13 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+await loadStore();
 await scanLibrary();
 setInterval(scanLibrary, SCAN_INTERVAL_MS).unref();
+setInterval(runSubscriptions, CHANNEL_CHECK_INTERVAL_MS).unref();
 
 server.listen(PORT, () => {
   console.log(`PrivateTube listening on http://0.0.0.0:${PORT}`);
   console.log(`Media directory: ${MEDIA_DIR}`);
+  console.log(`Data directory: ${DATA_DIR}`);
 });

@@ -17,13 +17,26 @@
         <input id="searchInput" type="search" placeholder="Search your library">
       </label>
       <button id="rescanButton" class="icon-button" type="button" title="Rescan library">⟳</button>
+      <button id="logoutButton" class="icon-button" type="button" title="Log out">Exit</button>
     </header>
+
+    <section id="loginOverlay" class="login-overlay" hidden>
+      <form id="loginForm" class="login-box">
+        <h1>PrivateTube</h1>
+        <input id="loginUsername" autocomplete="username" placeholder="Username">
+        <input id="loginPassword" autocomplete="current-password" type="password" placeholder="Password">
+        <button type="submit">Sign in</button>
+        <p id="loginStatus"></p>
+      </form>
+    </section>
 
     <main class="shell">
       <aside class="sidebar">
         <button class="nav-item active" type="button" data-filter="all">Home</button>
         <button class="nav-item" type="button" data-filter="recent">Latest</button>
         <button class="nav-item" type="button" data-filter="channels">Channels</button>
+        <button class="nav-item admin-only" type="button" data-filter="subscriptions">Subscriptions</button>
+        <button class="nav-item admin-only" type="button" data-filter="users">Users</button>
         <div class="add-panel">
           <form id="addForm">
             <label for="urlInput">Add a video</label>
@@ -31,6 +44,7 @@
               <input id="urlInput" type="url" placeholder="YouTube URL">
               <button type="submit">Add</button>
             </div>
+            <select id="qualitySelect" aria-label="Download quality"></select>
             <p id="addStatus"></p>
           </form>
         </div>
@@ -43,6 +57,7 @@
         </div>
         <div id="channelStrip" class="channel-strip"></div>
         <div id="grid" class="video-grid"></div>
+        <div id="adminPanel" class="admin-panel" hidden></div>
         <div id="emptyState" class="empty-state" hidden>
           <h2>No videos found</h2>
           <p>Once MeTube or a mounted library saves videos here, they will appear on this page.</p>
