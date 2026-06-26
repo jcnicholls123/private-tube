@@ -243,7 +243,7 @@ function videoQualityLabel(video) {
 }
 
 function visibleVideo(video) {
-  return state.preferences.showShorts || !video.isShort || state.filter === "shorts";
+  return state.filter === "shorts" ? video.isShort : !video.isShort;
 }
 
 function shuffledShorts() {
@@ -751,7 +751,7 @@ function renderSettings() {
     <div class="settings-grid">
       <section class="settings-card profile-settings-card">
         <h2>Profiles</h2>
-        <p>Watching as ${escapeHtml(profileDisplayName())}. Child profiles use this login and do not need passwords.</p>
+        <p>Watching as ${escapeHtml(profileDisplayName())}. Child profiles use this login, do not need passwords, and keep separate watch history.</p>
         <div class="profile-choice-list">
           ${state.profiles.map((profile) => `
             <div class="profile-choice ${profile.key === state.selectedProfile ? "active" : ""}">
@@ -789,14 +789,6 @@ function renderSettings() {
         <h2>Notifications</h2>
         <p>${notificationStatusText()}</p>
         <button id="notificationButton" class="secondary-button" type="button" ${canUseBrowserNotifications() ? "" : "disabled"}>${canUseBrowserNotifications() ? "Enable browser notifications" : "Browser notifications unavailable"}</button>
-      </section>
-      <section class="settings-card">
-        <h2>Shorts</h2>
-        <p>Show portrait videos in Home and Latest for this user/profile.</p>
-        <div class="segmented">
-          <button type="button" data-shorts-choice="true">Show</button>
-          <button type="button" data-shorts-choice="false">Hide</button>
-        </div>
       </section>
     </div>
     ${isAdmin() ? `<form id="settingsForm" class="settings-form settings-form-wide cast-settings-form">
@@ -885,17 +877,6 @@ function renderSettings() {
     state.selectedProfile = result.selectedProfile || state.selectedProfile;
     notify("Child profile added", "success");
     render();
-  });
-  document.querySelectorAll("[data-shorts-choice]").forEach((button) => {
-    button.classList.toggle("active", String(state.preferences.showShorts) === button.dataset.shortsChoice);
-    button.addEventListener("click", async () => {
-      state.preferences = await api("/api/preferences", {
-        method: "POST",
-        body: JSON.stringify({ showShorts: button.dataset.shortsChoice === "true" })
-      });
-      notify(state.preferences.showShorts ? "Shorts enabled" : "Shorts hidden", "success");
-      render();
-    });
   });
   document.querySelector("#brandNameButton").addEventListener("click", () => {
     applyBrandName(document.querySelector("#brandNameInput").value);

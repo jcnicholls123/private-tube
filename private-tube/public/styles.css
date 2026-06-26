@@ -100,11 +100,12 @@ button {
   border: 0;
   border-radius: 999px;
   background:
-    radial-gradient(circle at 74% 50%, rgba(248, 209, 111, 0.96), rgba(210, 160, 61, 0.92) 34%, transparent 56%),
-    linear-gradient(100deg, #262631 0%, #31313a 45%, #d0a048 100%);
+    radial-gradient(circle at 72% 44%, color-mix(in srgb, var(--surface-3) 92%, #fff), transparent 48%),
+    linear-gradient(120deg, var(--surface-3) 0%, var(--surface) 58%, color-mix(in srgb, var(--surface-2) 72%, var(--bg)) 100%);
   box-shadow:
     0 14px 30px rgba(0, 0, 0, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    inset 0 1px 0 color-mix(in srgb, var(--text) 16%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--line) 82%, transparent);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
@@ -113,7 +114,8 @@ button {
   transform: translateY(-1px);
   box-shadow:
     0 18px 34px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+    inset 0 1px 0 color-mix(in srgb, var(--text) 22%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
 }
 
 .menu-button span {
