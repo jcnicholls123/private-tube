@@ -1016,6 +1016,34 @@ button {
   line-height: 1;
 }
 
+.watched-badge {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 2;
+  display: inline-grid;
+  grid-template-columns: 14px auto;
+  gap: 5px;
+  align-items: center;
+  min-height: 25px;
+  border-radius: 999px;
+  background: rgba(10, 170, 92, 0.94);
+  color: #fff;
+  padding: 0 9px 0 7px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+}
+
+.watched-badge span {
+  width: 11px;
+  height: 7px;
+  border-left: 3px solid currentColor;
+  border-bottom: 3px solid currentColor;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
 :root[data-theme="light"] .quality-badge {
   background: rgba(255, 255, 255, 0.94);
   color: #111;

@@ -49,6 +49,7 @@
   var cancelNextButton = document.querySelector("#cancelNextButton");
   var previousVideoButton = document.querySelector("#previousVideoButton");
   var nextVideoButton = document.querySelector("#nextVideoButton");
+  var scrubButton = document.querySelector("#scrubButton");
   var currentTime = document.querySelector("#currentTime");
   var durationTime = document.querySelector("#durationTime");
   var progressFill = document.querySelector("#progressFill");
@@ -400,7 +401,7 @@
       }).join("") + '</div>' +
     '</section>' : "") + videos.map(function (video) {
       return '<button class="focus-card video-card' + (watched.has(video.id) ? " watched" : "") + '" type="button" data-video="' + video.id + '" data-focus-id="video-' + video.id + '">' +
-        '<span class="thumb">' + thumbnail(video) + (watched.has(video.id) ? '<span class="watched-tick" aria-label="Watched"></span>' : "") + "</span>" +
+        '<span class="thumb">' + thumbnail(video) + (watched.has(video.id) ? '<span class="watched-tick" aria-label="Watched"><span></span>WATCHED</span>' : "") + "</span>" +
         "<strong>" + video.title + "</strong>" +
         "<span>" + video.channel + "</span>" +
       "</button>";
@@ -431,6 +432,30 @@
   function focusPlayerControls() {
     showPlayerOverlay();
     if (!playerControlFocused()) playerAction.focus();
+  }
+
+  function hidePlayerControls() {
+    playerOverlay.classList.add("hidden");
+    player.focus();
+  }
+
+  function focusPlayerControl(direction) {
+    showPlayerOverlay();
+    var controls = [previousVideoButton, playerAction, nextVideoButton].filter(function (item) {
+      return item && !item.disabled;
+    });
+    var current = document.activeElement;
+    var index = controls.indexOf(current);
+    if (current === scrubButton) {
+      playerAction.focus();
+      return;
+    }
+    if (index < 0) {
+      playerAction.focus();
+      return;
+    }
+    var nextIndex = Math.max(0, Math.min(controls.length - 1, index + direction));
+    controls[nextIndex].focus();
   }
 
   function clearAutoplayCountdown() {
@@ -822,9 +847,25 @@
         event.preventDefault();
         return;
       }
-      if ((key === "ArrowLeft" || key === "ArrowRight") && playerControlFocused()) {
+      if (document.activeElement === scrubButton && key === "ArrowLeft") {
         showPlayerOverlay();
-        moveFocus(arrows[key]);
+        seekBy(-10);
+        event.preventDefault();
+        return;
+      }
+      if (document.activeElement === scrubButton && key === "ArrowRight") {
+        showPlayerOverlay();
+        seekBy(10);
+        event.preventDefault();
+        return;
+      }
+      if (playerControlFocused() && key === "ArrowLeft") {
+        focusPlayerControl(-1);
+        event.preventDefault();
+        return;
+      }
+      if (playerControlFocused() && key === "ArrowRight") {
+        focusPlayerControl(1);
         event.preventDefault();
         return;
       }
@@ -839,12 +880,24 @@
         return;
       }
       if (key === "ArrowDown" || key === "ArrowUp") {
-        if (playerControlFocused()) moveFocus(arrows[key]);
-        else focusPlayerControls();
+        if (document.activeElement === scrubButton && key === "ArrowUp") {
+          playerAction.focus();
+        } else if (playerControlFocused() && key === "ArrowDown") {
+          scrubButton.focus();
+        } else if (playerControlFocused()) {
+          focusPlayerControls();
+        } else {
+          focusPlayerControls();
+        }
         event.preventDefault();
         return;
       }
       if (isBack) {
+        if (playerControlFocused()) {
+          hidePlayerControls();
+          event.preventDefault();
+          return;
+        }
         closePlayer();
         event.preventDefault();
         return;

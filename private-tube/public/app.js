@@ -217,7 +217,7 @@ function formatRelative(value) {
 
 function thumbnail(video) {
   const media = video.thumbnail ? `<img src="${video.thumbnail}" alt="">` : `<div class="thumb-fallback"><span></span></div>`;
-  return `${media}<span class="quality-badge">${videoQualityLabel(video)}</span>`;
+  return `${media}<span class="quality-badge">${videoQualityLabel(video)}</span>${watchedBadge(video)}`;
 }
 
 function qualityPreset(id) {
@@ -240,6 +240,14 @@ function videoQualityLabel(video) {
   if (text.includes("mp4") || text.includes("m4v")) return "MP4";
   if (text.includes("mkv")) return "MKV";
   return "VIDEO";
+}
+
+function isWatchedVideo(video) {
+  return Boolean(video?.id && state.watchedVideoIds.includes(video.id));
+}
+
+function watchedBadge(video) {
+  return isWatchedVideo(video) ? `<span class="watched-badge"><span></span>WATCHED</span>` : "";
 }
 
 function visibleVideo(video) {

@@ -16,6 +16,7 @@ const metadataButton = document.querySelector("#metadataButton");
 let currentVideo = null;
 let castReady = false;
 let lastProgressSave = 0;
+let watchedVideoIds = [];
 
 document.documentElement.dataset.theme = localStorage.getItem("pt-theme") || "dark";
 const appBrandName = localStorage.getItem("pt-brand-name") || "PrivateTube";
@@ -28,8 +29,9 @@ function isIOS() {
 }
 
 function thumbnail(video) {
-  if (video.thumbnail) return `<img src="${video.thumbnail}" alt="">`;
-  return `<div class="thumb-fallback"><span></span></div>`;
+  const media = video.thumbnail ? `<img src="${video.thumbnail}" alt="">` : `<div class="thumb-fallback"><span></span></div>`;
+  const watched = watchedVideoIds.includes(video.id) ? `<span class="watched-badge"><span></span>WATCHED</span>` : "";
+  return `${media}${watched}`;
 }
 
 function setCastStatus(message) {
@@ -242,9 +244,10 @@ async function castCurrentVideo() {
 async function load() {
   const [library, progressResult] = await Promise.all([
     api("/api/library"),
-    api("/api/progress").catch(() => ({ progress: [] }))
+    api("/api/progress").catch(() => ({ progress: [], watchedVideoIds: [] }))
   ]);
   const video = library.videos.find((item) => item.id === videoId);
+  watchedVideoIds = progressResult.watchedVideoIds || [];
 
   if (!video) {
     videoTitle.textContent = "Video not found";

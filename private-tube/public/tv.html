@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PrivateTube TV</title>
-    <link rel="stylesheet" href="/tv.css?v=20260626-player-remote">
+    <link rel="stylesheet" href="/tv.css?v=20260626-watched-scrub">
   </head>
   <body>
     <main id="app" class="tv-shell">
@@ -72,14 +72,15 @@
           </div>
           <div class="player-progress">
             <span id="currentTime">0:00</span>
-            <div class="progress-track"><span id="progressFill"></span></div>
+            <button id="scrubButton" class="focus-card progress-track scrub-control" type="button" aria-label="Seek bar"><span id="progressFill"></span></button>
             <span id="durationTime">0:00</span>
           </div>
           <div class="player-hints">
             <span>OK Play/Pause</span>
-            <span>Left/Right Seek</span>
+            <span>Down Scrub</span>
+            <span>Left/Right Move</span>
             <span>Next marks watched</span>
-            <span>Back Library</span>
+            <span>Back Hide/Library</span>
           </div>
         </div>
         <div id="upNextOverlay" class="up-next-overlay" hidden>
@@ -101,6 +102,6 @@
         </div>
       </section>
     </main>
-    <script src="/tv.js?v=20260626-player-remote"></script>
+    <script src="/tv.js?v=20260626-watched-scrub"></script>
   </body>
 </html>
