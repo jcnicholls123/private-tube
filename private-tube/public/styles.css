@@ -988,6 +988,258 @@ button {
   object-fit: cover;
 }
 
+body.shorts-mode {
+  overflow: hidden;
+  background: #050505;
+}
+
+body.shorts-mode .topbar,
+body.shorts-mode .sidebar,
+body.shorts-mode .continue-section,
+body.shorts-mode .section-title,
+body.shorts-mode .channel-strip,
+body.shorts-mode .download-status {
+  display: none;
+}
+
+body.shorts-mode .shell {
+  display: block;
+  height: 100svh;
+  padding: 0;
+}
+
+body.shorts-mode .content {
+  height: 100svh;
+}
+
+.shorts-feed {
+  display: block;
+  height: 100svh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+  background: #050505;
+  scrollbar-width: none;
+}
+
+.shorts-feed::-webkit-scrollbar {
+  display: none;
+}
+
+.shorts-reel {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 100svh;
+  min-height: 540px;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(255, 0, 51, 0.18), transparent 28%),
+    #050505;
+}
+
+.shorts-player {
+  width: min(100vw, 520px);
+  height: 100svh;
+  max-height: 100svh;
+  background: #000;
+  object-fit: cover;
+  box-shadow: 0 0 80px rgba(0, 0, 0, 0.55);
+}
+
+.shorts-scrim {
+  position: absolute;
+  inset: auto 0 0;
+  height: 46%;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.82));
+  pointer-events: none;
+}
+
+.shorts-copy {
+  position: absolute;
+  left: max(18px, calc(50vw - 242px));
+  right: max(86px, calc(50vw - 242px));
+  bottom: 28px;
+  display: grid;
+  gap: 8px;
+  color: #fff;
+}
+
+.shorts-copy h2 {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  font-size: clamp(19px, 4vw, 28px);
+  line-height: 1.08;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.shorts-copy p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+}
+
+.shorts-channel {
+  justify-self: start;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  padding: 7px 11px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.shorts-actions {
+  position: absolute;
+  right: max(16px, calc(50vw - 248px));
+  bottom: 28px;
+  display: grid;
+  gap: 12px;
+}
+
+.shorts-exit {
+  position: absolute;
+  left: max(16px, calc(50vw - 248px));
+  top: max(16px, env(safe-area-inset-top));
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+}
+
+.shorts-exit:hover {
+  background: #fff;
+  color: #111;
+}
+
+.shorts-actions button,
+.shorts-actions a {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+}
+
+.shorts-actions button:hover,
+.shorts-actions button.active,
+.shorts-actions a:hover {
+  background: #fff;
+  color: #111;
+}
+
+.shorts-action-icon {
+  position: relative;
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.shorts-action-icon::before,
+.shorts-action-icon::after {
+  content: "";
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.shorts-action-icon.play::before {
+  left: 7px;
+  top: 3px;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 13px solid currentColor;
+}
+
+.shorts-action-icon.back::before {
+  left: 3px;
+  top: 10px;
+  width: 17px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.shorts-action-icon.back::after {
+  left: 3px;
+  top: 6px;
+  width: 9px;
+  height: 9px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.shorts-action-icon.mute::before {
+  left: 1px;
+  top: 6px;
+  width: 8px;
+  height: 10px;
+  background: currentColor;
+  box-shadow: 7px -4px 0 -2px currentColor, 7px 4px 0 -2px currentColor;
+}
+
+.shorts-action-icon.mute::after {
+  right: 2px;
+  top: 4px;
+  width: 10px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+}
+
+.shorts-action-icon.open::before {
+  inset: 4px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+}
+
+.shorts-action-icon.open::after {
+  right: 2px;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+}
+
+.shorts-action-icon.shuffle::before {
+  left: 1px;
+  top: 6px;
+  width: 18px;
+  height: 10px;
+  border-top: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: skewX(-22deg);
+}
+
+.shorts-action-icon.shuffle::after {
+  right: 1px;
+  top: 2px;
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
 .video-copy {
   padding-top: 10px;
 }

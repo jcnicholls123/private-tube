@@ -8,6 +8,8 @@ const state = {
   progress: [],
   settings: { metubeUrl: "", publicUrl: "" },
   preferences: { showShorts: true },
+  shortsOrderKey: "",
+  shortsOrder: [],
   filter: "all",
   query: "",
   channelId: ""
@@ -231,6 +233,21 @@ function visibleVideo(video) {
   return state.preferences.showShorts || !video.isShort || state.filter === "shorts";
 }
 
+function shuffledShorts() {
+  const shorts = state.library.videos.filter((video) => video.isShort);
+  const key = shorts.map((video) => video.id).join("|");
+  if (state.shortsOrderKey !== key || state.shortsOrder.length !== shorts.length) {
+    state.shortsOrderKey = key;
+    state.shortsOrder = [...shorts].sort(() => Math.random() - 0.5).map((video) => video.id);
+  }
+  const byId = new Map(shorts.map((video) => [video.id, video]));
+  return state.shortsOrder.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function reshuffleShorts() {
+  state.shortsOrder = [...state.shortsOrder].sort(() => Math.random() - 0.5);
+}
+
 function renderQualityInfo() {
   if (!qualityInfo) return;
   qualityInfo.textContent = qualityDescription(qualitySelect.value);
@@ -313,7 +330,7 @@ function filteredVideos() {
   }
 
   if (state.filter === "recent") videos = videos.slice(0, 24);
-  if (state.filter === "shorts") videos = state.library.videos.filter((video) => video.isShort);
+  if (state.filter === "shorts") videos = shuffledShorts();
 
   if (state.query.trim()) {
     const query = state.query.toLowerCase();
@@ -338,8 +355,13 @@ function renderVideos(videos) {
     return;
   }
 
+  if (state.filter === "shorts") {
+    renderShortsFeed(videos);
+    return;
+  }
+
   grid.classList.remove("channel-grid");
-  grid.classList.toggle("shorts-grid", state.filter === "shorts");
+  grid.classList.remove("shorts-feed");
   grid.innerHTML = videos.map((video) => `
     <article class="video-card ${video.isShort ? "short-card" : ""}">
       <a class="thumb" href="${video.watchUrl}">${thumbnail(video)}</a>
@@ -353,6 +375,82 @@ function renderVideos(videos) {
 
   grid.querySelectorAll("[data-channel]").forEach((button) => {
     button.addEventListener("click", () => selectFilter("channel", button.dataset.channel));
+  });
+}
+
+function renderShortsFeed(videos) {
+  grid.classList.remove("channel-grid");
+  grid.classList.add("shorts-feed");
+  grid.innerHTML = videos.map((video, index) => `
+    <article class="shorts-reel" data-short-index="${index}">
+      <video class="shorts-player" data-src="${video.url}" poster="${video.thumbnail || ""}" playsinline loop muted preload="none"></video>
+      <div class="shorts-scrim"></div>
+      <button class="shorts-exit" type="button" data-shorts-home aria-label="Back to home"><span class="shorts-action-icon back"></span></button>
+      <div class="shorts-copy">
+        <button class="shorts-channel" type="button" data-channel="${video.channelId}">${video.channel}</button>
+        <h2>${escapeHtml(video.title)}</h2>
+        <p>${videoMeta(video)}</p>
+      </div>
+      <div class="shorts-actions">
+        <button type="button" data-shorts-toggle="${index}" aria-label="Play or pause short"><span class="shorts-action-icon play"></span></button>
+        <button type="button" data-shorts-mute="${index}" aria-label="Mute or unmute short"><span class="shorts-action-icon mute"></span></button>
+        <a href="${video.watchUrl}" aria-label="Open full watch page"><span class="shorts-action-icon open"></span></a>
+        <button type="button" data-shorts-shuffle aria-label="Shuffle shorts"><span class="shorts-action-icon shuffle"></span></button>
+      </div>
+    </article>
+  `).join("");
+
+  const players = [...grid.querySelectorAll(".shorts-player")];
+  const activate = (player) => {
+    if (!player) return;
+    if (!player.src) player.src = player.dataset.src;
+    players.forEach((item) => {
+      if (item !== player) item.pause();
+    });
+    player.play().catch(() => {});
+  };
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting && entry.intersectionRatio > 0.62) {
+        activate(entry.target.querySelector("video"));
+      }
+    });
+  }, { threshold: [0.62] });
+
+  grid.querySelectorAll(".shorts-reel").forEach((card) => observer.observe(card));
+  if (players[0]) {
+    players[0].src = players[0].dataset.src;
+    players[0].play().catch(() => {});
+  }
+
+  grid.querySelectorAll("[data-channel]").forEach((button) => {
+    button.addEventListener("click", () => selectFilter("channel", button.dataset.channel));
+  });
+  grid.querySelectorAll("[data-shorts-home]").forEach((button) => {
+    button.addEventListener("click", () => selectFilter("all"));
+  });
+  grid.querySelectorAll("[data-shorts-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const player = players[Number(button.dataset.shortsToggle)];
+      if (!player) return;
+      if (player.paused) player.play().catch(() => {});
+      else player.pause();
+    });
+  });
+  grid.querySelectorAll("[data-shorts-mute]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const player = players[Number(button.dataset.shortsMute)];
+      if (!player) return;
+      player.muted = !player.muted;
+      button.classList.toggle("active", !player.muted);
+    });
+  });
+  grid.querySelectorAll("[data-shorts-shuffle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      reshuffleShorts();
+      render();
+      grid.scrollTo({ top: 0, behavior: "smooth" });
+    });
   });
 }
 
@@ -716,6 +814,7 @@ function renderAddPanel() {
 
 function render() {
   const videos = filteredVideos();
+  document.body.classList.toggle("shorts-mode", state.filter === "shorts");
   adminPanel.hidden = !(state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings");
   if (adminPanel.hidden) adminPanel.innerHTML = "";
   renderChannels();
