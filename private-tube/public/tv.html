@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PrivateTube TV</title>
-    <link rel="stylesheet" href="/tv.css?v=20260626-profiles-cleanup-tv-next">
+    <link rel="stylesheet" href="/tv.css?v=20260626-player-remote">
   </head>
   <body>
     <main id="app" class="tv-shell">
@@ -58,9 +58,9 @@
       <section id="playerPanel" class="player-panel" hidden>
         <video id="player" autoplay playsinline></video>
         <div id="playerOverlay" class="player-copy">
-          <div class="player-main-action" id="playerAction" aria-label="Pause">
+          <button class="focus-card player-main-action" id="playerAction" type="button" aria-label="Pause">
             <span class="player-action-icon"></span>
-          </div>
+          </button>
           <div class="player-info">
             <h1 id="playerTitle"></h1>
             <p id="playerMeta"></p>
@@ -101,6 +101,6 @@
         </div>
       </section>
     </main>
-    <script src="/tv.js?v=20260626-profiles-cleanup-tv-next"></script>
+    <script src="/tv.js?v=20260626-player-remote"></script>
   </body>
 </html>

@@ -419,8 +419,18 @@
     playerOverlay.classList.remove("hidden");
     window.clearTimeout(state.overlayTimer);
     state.overlayTimer = window.setTimeout(function () {
+      if (playerControlFocused()) return;
       playerOverlay.classList.add("hidden");
     }, 3500);
+  }
+
+  function playerControlFocused() {
+    return playerOverlay.contains(document.activeElement) && document.activeElement !== playerOverlay;
+  }
+
+  function focusPlayerControls() {
+    showPlayerOverlay();
+    if (!playerControlFocused()) playerAction.focus();
   }
 
   function clearAutoplayCountdown() {
@@ -754,6 +764,7 @@
   });
   player.addEventListener("mousemove", showPlayerOverlay);
   player.addEventListener("click", showPlayerOverlay);
+  playerAction.addEventListener("click", togglePlayback);
   playNextButton.addEventListener("click", playNextVideo);
   cancelNextButton.addEventListener("click", cancelAutoplay);
   previousVideoButton.addEventListener("click", function () {
@@ -811,6 +822,12 @@
         event.preventDefault();
         return;
       }
+      if ((key === "ArrowLeft" || key === "ArrowRight") && playerControlFocused()) {
+        showPlayerOverlay();
+        moveFocus(arrows[key]);
+        event.preventDefault();
+        return;
+      }
       if (key === "ArrowLeft") {
         seekBy(-10);
         event.preventDefault();
@@ -822,8 +839,8 @@
         return;
       }
       if (key === "ArrowDown" || key === "ArrowUp") {
-        showPlayerOverlay();
-        moveFocus(arrows[key]);
+        if (playerControlFocused()) moveFocus(arrows[key]);
+        else focusPlayerControls();
         event.preventDefault();
         return;
       }

@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="PrivateTube">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="stylesheet" href="/styles.css?v=20260626-profiles-cleanup-tv-next">
+    <link rel="stylesheet" href="/styles.css?v=20260626-menu-activity">
   </head>
   <body>
     <header class="topbar">
@@ -56,6 +56,13 @@
         <button id="rescanButton" class="menu-item" type="button"><i class="menu-icon rescan"></i><span>Rescan library</span></button>
         <button id="logoutButton" class="menu-item danger" type="button"><i class="menu-icon logout"></i><span>Log out</span></button>
       </div>
+      <section id="downloadStatus" class="download-status menu-download-status" hidden>
+        <div>
+          <strong>Download activity</strong>
+          <span id="downloadStatusText">No recent downloads</span>
+        </div>
+        <div id="downloadActivityList" class="download-activity-list"></div>
+      </section>
     </aside>
 
     <main class="shell">
@@ -78,13 +85,6 @@
             <p id="addStatus"></p>
           </form>
         </div>
-        <section id="downloadStatus" class="download-status" hidden>
-          <div>
-            <strong>Download activity</strong>
-            <span id="downloadStatusText">No recent downloads</span>
-          </div>
-          <div id="downloadActivityList" class="download-activity-list"></div>
-        </section>
       </aside>
 
       <section class="content" aria-live="polite">
@@ -111,6 +111,6 @@
     <div id="toastStack" class="toast-stack" aria-live="polite"></div>
 
     <script src="/pwa.js" type="module"></script>
-    <script src="/app.js?v=20260626-profiles-cleanup-tv-next" type="module"></script>
+    <script src="/app.js?v=20260626-menu-activity" type="module"></script>
   </body>
 </html>

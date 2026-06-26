@@ -575,10 +575,13 @@ function renderContinue() {
 function renderDownloadStatus() {
   const items = state.downloads.slice(0, 4);
   downloadStatus.hidden = items.length === 0;
+  menuButton.classList.toggle("has-downloads", items.length > 0);
+  menuButton.classList.remove("failed");
   if (!items.length) return;
 
   const failed = items.some((item) => item.status === "failed");
   downloadStatus.classList.toggle("failed", failed);
+  menuButton.classList.toggle("failed", failed);
   downloadStatusText.textContent = `${items.length} recent MeTube request${items.length === 1 ? "" : "s"}`;
   downloadActivityList.innerHTML = items.map((item) => {
     const label = item.status === "queued" ? "Sent to MeTube" : item.status === "failed" ? "Failed" : item.status;
@@ -748,7 +751,7 @@ function renderSettings() {
     <div class="settings-grid">
       <section class="settings-card profile-settings-card">
         <h2>Profiles</h2>
-        <p>Watching as ${escapeHtml(profileDisplayName())}.</p>
+        <p>Watching as ${escapeHtml(profileDisplayName())}. Child profiles use this login and do not need passwords.</p>
         <div class="profile-choice-list">
           ${state.profiles.map((profile) => `
             <div class="profile-choice ${profile.key === state.selectedProfile ? "active" : ""}">

@@ -780,6 +780,7 @@ video {
   place-items: center;
   width: 118px;
   height: 118px;
+  border: 0;
   border-radius: 999px;
   background:
     radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.82)),
@@ -790,6 +791,7 @@ video {
     inset 0 0 0 1px rgba(255, 255, 255, 0.82);
   transform: translateZ(0);
   transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  pointer-events: auto;
 }
 
 .player-main-action:active {
