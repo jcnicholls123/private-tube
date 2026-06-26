@@ -291,6 +291,26 @@ p {
   text-align: center;
 }
 
+.preset-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.preset-action {
+  min-height: 62px;
+  padding: 0 18px;
+  background: var(--surface-2);
+  font-size: 22px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.preset-action.active {
+  background: #fff;
+  color: #111;
+}
+
 .player-panel {
   position: fixed;
   inset: 0;

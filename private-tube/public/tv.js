@@ -6,6 +6,7 @@
     profiles: [],
     selectedProfile: localStorage.getItem("pt-tv-profile") || "",
     brandName: "PrivateTube",
+    autoplay: localStorage.getItem("pt-tv-autoplay") || "channel",
     currentVideo: null,
     lastProgressSave: 0,
     lastLibraryFocus: null,
@@ -187,11 +188,36 @@
       grid.className = "tv-grid settings-grid";
       grid.innerHTML = '<section class="settings-card">' +
         '<label><span>App name</span><input id="brandNameInput" value="' + escapeHtml(state.brandName) + '" placeholder="PrivateTube"></label>' +
+        '<div class="preset-row">' +
+          '<button class="focus-card preset-action" type="button" data-brand-preset="NichTube">NichTube</button>' +
+          '<button class="focus-card preset-action" type="button" data-brand-preset="BryTube">BryTube</button>' +
+          '<button class="focus-card preset-action" type="button" data-brand-preset="PrivateTube">PrivateTube</button>' +
+        '</div>' +
         '<button class="focus-card settings-action" type="button" id="saveBrandButton">Save name</button>' +
+        '<h2>Autoplay</h2>' +
+        '<div class="preset-row">' +
+          '<button class="focus-card preset-action" type="button" data-autoplay="off">Off</button>' +
+          '<button class="focus-card preset-action" type="button" data-autoplay="channel">Same channel</button>' +
+          '<button class="focus-card preset-action" type="button" data-autoplay="view">Current view</button>' +
+        '</div>' +
         '<button class="focus-card settings-action" type="button" id="profileButton">Switch profile</button>' +
       "</section>";
       document.querySelector("#saveBrandButton").addEventListener("click", function () {
         saveBrandName(document.querySelector("#brandNameInput").value);
+      });
+      grid.querySelectorAll("[data-brand-preset]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          document.querySelector("#brandNameInput").value = button.dataset.brandPreset;
+          saveBrandName(button.dataset.brandPreset);
+        });
+      });
+      grid.querySelectorAll("[data-autoplay]").forEach(function (button) {
+        button.classList.toggle("active", button.dataset.autoplay === state.autoplay);
+        button.addEventListener("click", function () {
+          state.autoplay = button.dataset.autoplay;
+          localStorage.setItem("pt-tv-autoplay", state.autoplay);
+          render();
+        });
       });
       document.querySelector("#profileButton").addEventListener("click", function () {
         state.selectedProfile = "";
@@ -278,6 +304,16 @@
     player.currentTime = Math.max(0, Math.min(player.duration - 1, player.currentTime + seconds));
     updatePlayerControls();
     showPlayerOverlay();
+  }
+
+  function nextAutoplayVideo() {
+    if (state.autoplay === "off" || !state.currentVideo) return null;
+    var queue = state.autoplay === "channel"
+      ? state.library.videos.filter(function (video) { return video.channelId === state.currentVideo.channelId; })
+      : videosForView();
+    var index = queue.findIndex(function (video) { return video.id === state.currentVideo.id; });
+    if (index < 0 || index + 1 >= queue.length) return null;
+    return queue[index + 1];
   }
 
   function openVideo(videoId) {
@@ -381,7 +417,8 @@
       method: "POST",
       body: JSON.stringify({
         username: document.querySelector("#usernameInput").value,
-        password: document.querySelector("#passwordInput").value
+        password: document.querySelector("#passwordInput").value,
+        remember: true
       })
     }).then(loadProfiles).catch(function (error) {
       loginStatus.textContent = error.message;
@@ -410,6 +447,8 @@
   player.addEventListener("ended", function () {
     updatePlayerControls();
     saveProgress(true);
+    var next = nextAutoplayVideo();
+    if (next) openVideo(next.id);
   });
   player.addEventListener("mousemove", showPlayerOverlay);
   player.addEventListener("click", showPlayerOverlay);

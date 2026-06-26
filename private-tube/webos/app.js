@@ -1,5 +1,6 @@
 (function () {
   var storageKey = "privatetube-url";
+  var defaultServerUrl = "http://10.69.24.3:3020";
   var input = document.querySelector("#serverUrl");
   var openButton = document.querySelector("#openButton");
   var saveButton = document.querySelector("#saveButton");
@@ -62,8 +63,9 @@
     if (next) next.focus();
   }
 
-  input.value = localStorage.getItem(storageKey) || "";
+  input.value = localStorage.getItem(storageKey) || defaultServerUrl;
   if (input.value) {
+    if (!localStorage.getItem(storageKey)) localStorage.setItem(storageKey, normalizeUrl(input.value));
     input.disabled = true;
     introText.textContent = "Saved URL loaded. Opening TV mode automatically.";
     setStatus("Press Change now if you need to edit the server URL.");

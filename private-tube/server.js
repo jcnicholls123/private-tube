@@ -140,19 +140,37 @@ function parseCookies(req) {
   }));
 }
 
+function appendCookie(res, cookie) {
+  const existing = res.getHeader("set-cookie");
+  if (!existing) {
+    res.setHeader("set-cookie", cookie);
+  } else if (Array.isArray(existing)) {
+    res.setHeader("set-cookie", [...existing, cookie]);
+  } else {
+    res.setHeader("set-cookie", [existing, cookie]);
+  }
+}
+
 function setSessionCookie(res, token) {
-  res.setHeader("set-cookie", `pt_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`);
+  appendCookie(res, `pt_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`);
+}
+
+function setTvTokenCookie(res, token) {
+  appendCookie(res, `pt_tv_token=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000`);
 }
 
 function clearSessionCookie(res) {
-  res.setHeader("set-cookie", "pt_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
+  appendCookie(res, "pt_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
+  appendCookie(res, "pt_tv_token=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
 }
 
 function getSession(req) {
   if (!AUTH_ENABLED) return { username: "local", role: "admin" };
-  const token = parseCookies(req).pt_session;
-  if (!token) return null;
-  return sessions.get(token) || null;
+  const cookies = parseCookies(req);
+  const token = cookies.pt_session;
+  if (token && sessions.has(token)) return sessions.get(token);
+  if (cookies.pt_tv_token) return getTvTokenSession(cookies.pt_tv_token);
+  return null;
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -177,6 +195,10 @@ function publicUser(user) {
 
 function progressUsername(session) {
   return session?.profile || session?.username;
+}
+
+function hashToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
 }
 
 async function readJson(filePath, fallback) {
@@ -264,6 +286,13 @@ function initSchema() {
     updated_at TEXT NOT NULL,
     PRIMARY KEY (username, video_id)
   )`);
+  run(`CREATE TABLE IF NOT EXISTS tv_tokens (
+    token_hash TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_used_at TEXT,
+    user_agent TEXT
+  )`);
 }
 
 function getSecret(key) {
@@ -318,6 +347,7 @@ function upsertUser(user) {
 
 function deleteUser(username) {
   run("DELETE FROM users WHERE username = ?", [username]);
+  run("DELETE FROM tv_tokens WHERE username = ?", [username]);
 }
 
 function setupRequired() {
@@ -407,6 +437,27 @@ function channelFromSubscription(subscription) {
     subscribed: true,
     lastStatus: subscription.lastStatus || "new"
   };
+}
+
+function createTvToken(username, userAgent = "") {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const now = new Date().toISOString();
+  run(`INSERT INTO tv_tokens (token_hash, username, created_at, last_used_at, user_agent)
+    VALUES (?, ?, ?, ?, ?)`, [hashToken(token), username, now, now, userAgent]);
+  return token;
+}
+
+function getTvTokenSession(token) {
+  const tokenHash = hashToken(token);
+  const remembered = get("SELECT username FROM tv_tokens WHERE token_hash = ?", [tokenHash]);
+  if (!remembered) return null;
+  const user = getUser(remembered.username);
+  if (!user) {
+    run("DELETE FROM tv_tokens WHERE token_hash = ?", [tokenHash]);
+    return null;
+  }
+  run("UPDATE tv_tokens SET last_used_at = ? WHERE token_hash = ?", [new Date().toISOString(), tokenHash]);
+  return { username: user.username, role: user.role || "viewer", remembered: true };
 }
 
 function saveWatchProgress(username, videoId, position, duration) {
@@ -1176,6 +1227,9 @@ async function handleApi(req, res, url) {
     const session = { username: user.username, role: user.role || "viewer" };
     sessions.set(token, session);
     setSessionCookie(res, token);
+    if (payload.remember) {
+      setTvTokenCookie(res, createTvToken(user.username, req.headers["user-agent"] || ""));
+    }
     return sendJson(res, 200, { ok: true, user: session });
   }
 
@@ -1251,6 +1305,10 @@ async function handleApi(req, res, url) {
     const token = parseCookies(req).pt_session;
     if (token && sessions.has(token)) {
       sessions.set(token, { ...sessions.get(token), profile: profile.username });
+    } else {
+      const newToken = crypto.randomBytes(32).toString("base64url");
+      sessions.set(newToken, { username: session.username, role: session.role || "viewer", profile: profile.username });
+      setSessionCookie(res, newToken);
     }
     return sendJson(res, 200, { selectedProfile: profile.username });
   }
