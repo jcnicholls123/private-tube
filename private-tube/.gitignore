@@ -6,3 +6,7 @@ setup-test-data/
 auth-rework-test-data/
 fallback-login-test-data/
 webos/*.ipk
+android-tv/.gradle/
+android-tv/local.properties
+android-tv/app/build/
+android-tv/build/

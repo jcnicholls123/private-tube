@@ -1,5 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
-  <rect width="400" height="400" rx="88" fill="#0f0f0f"/>
-  <rect x="76" y="138" width="248" height="174" rx="44" fill="#ff0033"/>
-  <path d="M180 178v94l78-47z" fill="#fff"/>
+  <defs>
+    <linearGradient id="bg" x1="58" y1="46" x2="342" y2="354" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#202020"/>
+      <stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="86" y1="128" x2="316" y2="296" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff1f4a"/>
+      <stop offset="1" stop-color="#d9002b"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="88" fill="url(#bg)"/>
+  <circle cx="286" cy="92" r="54" fill="#ff0033" opacity=".22"/>
+  <rect x="68" y="124" width="264" height="186" rx="46" fill="url(#screen)"/>
+  <path d="M180 168v98l82-49z" fill="#fff"/>
+  <path d="M124 330h152" stroke="#fff" stroke-opacity=".22" stroke-width="20" stroke-linecap="round"/>
 </svg>

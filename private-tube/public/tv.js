@@ -9,8 +9,12 @@
     autoplay: localStorage.getItem("pt-tv-autoplay") || "channel",
     theme: localStorage.getItem("pt-tv-theme") || "dark",
     currentVideo: null,
+    nextVideo: null,
+    autoplayCountdown: 0,
     lastProgressSave: 0,
     lastLibraryFocus: null,
+    suppressNextPop: false,
+    autoplayTimer: null,
     overlayTimer: null
   };
 
@@ -30,9 +34,17 @@
   var player = document.querySelector("#player");
   var playerOverlay = document.querySelector("#playerOverlay");
   var playerAction = document.querySelector("#playerAction");
+  var playerActionText = document.querySelector("#playerActionText");
   var playerTitle = document.querySelector("#playerTitle");
   var playerMeta = document.querySelector("#playerMeta");
   var playerQuality = document.querySelector("#playerQuality");
+  var upNextOverlay = document.querySelector("#upNextOverlay");
+  var upNextCount = document.querySelector("#upNextCount");
+  var upNextTitle = document.querySelector("#upNextTitle");
+  var upNextMeta = document.querySelector("#upNextMeta");
+  var upNextThumb = document.querySelector("#upNextThumb");
+  var playNextButton = document.querySelector("#playNextButton");
+  var cancelNextButton = document.querySelector("#cancelNextButton");
   var currentTime = document.querySelector("#currentTime");
   var durationTime = document.querySelector("#durationTime");
   var progressFill = document.querySelector("#progressFill");
@@ -62,6 +74,7 @@
   }
 
   function show(panel) {
+    if (panel !== startupPanel) document.body.classList.add("app-opened");
     startupPanel.hidden = true;
     offlinePanel.hidden = true;
     loginPanel.hidden = panel !== loginPanel;
@@ -71,6 +84,7 @@
   }
 
   function showOffline(message) {
+    document.body.classList.add("app-opened");
     startupPanel.hidden = true;
     offlinePanel.hidden = false;
     loginPanel.hidden = true;
@@ -132,20 +146,26 @@
     if (video.resolutionLabel) return video.resolutionLabel;
     if (video.height) return video.height >= 2000 ? "4K" : video.height + "p";
     var text = [video.title, video.path, video.contentType].join(" ").toLowerCase();
-    if (/2160|4k|uhd/.test(text)) return "4K";
-    if (/1440|qhd/.test(text)) return "1440p";
-    if (/1080|fhd/.test(text)) return "1080p";
-    if (/720|hd/.test(text)) return "720p";
-    if (/480/.test(text)) return "480p";
     if (/webm/.test(text)) return "WEBM";
     if (/mp4|m4v/.test(text)) return "MP4";
     if (/mkv/.test(text)) return "MKV";
     return "VIDEO";
   }
 
+  function goHome() {
+    state.filter = "all";
+    state.channelId = "";
+    state.lastLibraryFocus = null;
+    render();
+  }
+
   function thumbnail(video) {
     var media = video.thumbnail ? '<img src="' + video.thumbnail + '" alt="">' : '<span class="thumb-fallback"></span>';
     return media + '<span class="quality-badge">' + qualityLabel(video) + '</span>';
+  }
+
+  function thumbnailImage(video) {
+    return video.thumbnail ? '<img src="' + video.thumbnail + '" alt="">' : '<span class="thumb-fallback"></span>';
   }
 
   function channelThumb(channel) {
@@ -179,26 +199,40 @@
 
   function moveFocus(direction) {
     var items = visibleFocusables();
-    var index = items.indexOf(document.activeElement);
-    if (index < 0) index = 0;
-    var columns = 1;
+    var current = document.activeElement && items.indexOf(document.activeElement) >= 0
+      ? document.activeElement
+      : items[0];
+    if (!current) return;
 
-    if (!libraryPanel.hidden && grid.contains(document.activeElement)) {
-      columns = state.filter === "channels" ? 5 : 4;
-    } else if (!profilePanel.hidden) {
-      columns = 4;
-    } else if (!libraryPanel.hidden && tabs.contains(document.activeElement)) {
-      columns = 1;
-    }
+    var currentRect = current.getBoundingClientRect();
+    var currentX = currentRect.left + currentRect.width / 2;
+    var currentY = currentRect.top + currentRect.height / 2;
+    var best = null;
+    var bestScore = Infinity;
 
-    var delta = direction;
-    if (direction === "up") delta = -columns;
-    if (direction === "down") delta = columns;
-    if (direction === "left") delta = -1;
-    if (direction === "right") delta = 1;
+    items.forEach(function (item) {
+      if (item === current) return;
+      var rect = item.getBoundingClientRect();
+      var x = rect.left + rect.width / 2;
+      var y = rect.top + rect.height / 2;
+      var dx = x - currentX;
+      var dy = y - currentY;
+      var primary = direction === "left" || direction === "right" ? dx : dy;
+      var secondary = direction === "left" || direction === "right" ? Math.abs(dy) : Math.abs(dx);
 
-    var nextIndex = Math.max(0, Math.min(items.length - 1, index + delta));
-    if (items[nextIndex]) items[nextIndex].focus();
+      if (direction === "left" && primary >= -8) return;
+      if (direction === "right" && primary <= 8) return;
+      if (direction === "up" && primary >= -8) return;
+      if (direction === "down" && primary <= 8) return;
+
+      var score = Math.abs(primary) + secondary * 2.4;
+      if (score < bestScore) {
+        bestScore = score;
+        best = item;
+      }
+    });
+
+    if (best) best.focus();
   }
 
   function restoreLibraryFocus() {
@@ -236,23 +270,23 @@
       grid.innerHTML = '<section class="settings-card">' +
         '<label><span>App name</span><input id="brandNameInput" value="' + escapeHtml(state.brandName) + '" placeholder="PrivateTube"></label>' +
         '<div class="preset-row">' +
-          '<button class="focus-card preset-action" type="button" data-brand-preset="NichTube">NichTube</button>' +
-          '<button class="focus-card preset-action" type="button" data-brand-preset="BryTube">BryTube</button>' +
-          '<button class="focus-card preset-action" type="button" data-brand-preset="PrivateTube">PrivateTube</button>' +
+          '<button class="focus-card preset-action" type="button" data-brand-preset="NichTube"><span class="option-icon option-icon-brand"></span><span>NichTube</span></button>' +
+          '<button class="focus-card preset-action" type="button" data-brand-preset="BryTube"><span class="option-icon option-icon-brand"></span><span>BryTube</span></button>' +
+          '<button class="focus-card preset-action" type="button" data-brand-preset="PrivateTube"><span class="option-icon option-icon-brand"></span><span>PrivateTube</span></button>' +
         '</div>' +
-        '<button class="focus-card settings-action" type="button" id="saveBrandButton">Save name</button>' +
+        '<button class="focus-card settings-action" type="button" id="saveBrandButton"><span class="option-icon option-icon-save"></span><span>Save name</span></button>' +
         '<h2>Autoplay</h2>' +
         '<div class="preset-row">' +
-          '<button class="focus-card preset-action" type="button" data-autoplay="off">Off</button>' +
-          '<button class="focus-card preset-action" type="button" data-autoplay="channel">Same channel</button>' +
-          '<button class="focus-card preset-action" type="button" data-autoplay="view">Current view</button>' +
+          '<button class="focus-card preset-action" type="button" data-autoplay="off"><span class="option-icon option-icon-off"></span><span>Off</span></button>' +
+          '<button class="focus-card preset-action" type="button" data-autoplay="channel"><span class="option-icon option-icon-channel"></span><span>Same channel</span></button>' +
+          '<button class="focus-card preset-action" type="button" data-autoplay="view"><span class="option-icon option-icon-view"></span><span>Current view</span></button>' +
         '</div>' +
         '<h2>Theme</h2>' +
         '<div class="preset-row">' +
-          '<button class="focus-card preset-action" type="button" data-theme="dark">Night</button>' +
-          '<button class="focus-card preset-action" type="button" data-theme="light">Day</button>' +
+          '<button class="focus-card preset-action" type="button" data-theme="dark"><span class="option-icon option-icon-night"></span><span>Night</span></button>' +
+          '<button class="focus-card preset-action" type="button" data-theme="light"><span class="option-icon option-icon-day"></span><span>Day</span></button>' +
         '</div>' +
-        '<button class="focus-card settings-action" type="button" id="profileButton">Switch profile</button>' +
+        '<button class="focus-card settings-action" type="button" id="profileButton"><span class="option-icon option-icon-profile"></span><span>Switch profile</span></button>' +
       "</section>";
       document.querySelector("#saveBrandButton").addEventListener("click", function () {
         saveBrandName(document.querySelector("#brandNameInput").value);
@@ -303,6 +337,7 @@
         button.addEventListener("click", function () {
           state.filter = "channel";
           state.channelId = button.dataset.channel;
+          history.pushState({ tvView: "channel", channelId: state.channelId }, "", "#channel-" + encodeURIComponent(state.channelId));
           render();
         });
       });
@@ -334,11 +369,20 @@
   }
 
   function showPlayerOverlay() {
+    if (!upNextOverlay.hidden) return;
     playerOverlay.classList.remove("hidden");
     window.clearTimeout(state.overlayTimer);
     state.overlayTimer = window.setTimeout(function () {
       playerOverlay.classList.add("hidden");
     }, 3500);
+  }
+
+  function clearAutoplayCountdown() {
+    window.clearInterval(state.autoplayTimer);
+    state.autoplayTimer = null;
+    state.nextVideo = null;
+    state.autoplayCountdown = 0;
+    upNextOverlay.hidden = true;
   }
 
   function updatePlayerControls() {
@@ -348,7 +392,8 @@
     progressFill.style.width = percent + "%";
     currentTime.textContent = formatTime(position);
     durationTime.textContent = duration ? formatTime(duration) : "0:00";
-    playerAction.textContent = player.paused ? "Play" : "Pause";
+    playerAction.classList.toggle("paused", player.paused);
+    playerActionText.textContent = player.paused ? "Play" : "Pause";
   }
 
   function togglePlayback() {
@@ -371,8 +416,55 @@
       ? state.library.videos.filter(function (video) { return video.channelId === state.currentVideo.channelId; })
       : videosForView();
     var index = queue.findIndex(function (video) { return video.id === state.currentVideo.id; });
-    if (index < 0 || index + 1 >= queue.length) return null;
-    return queue[index + 1];
+    if (index >= 0 && index + 1 < queue.length) return queue[index + 1];
+
+    var sameChannel = state.library.videos.find(function (video) {
+      return video.id !== state.currentVideo.id && video.channelId === state.currentVideo.channelId;
+    });
+    if (sameChannel) return sameChannel;
+
+    return state.library.videos.find(function (video) {
+      return video.id !== state.currentVideo.id;
+    }) || state.currentVideo;
+  }
+
+  function renderUpNext() {
+    if (!state.nextVideo) return;
+    upNextCount.textContent = String(state.autoplayCountdown);
+    upNextCount.parentElement.style.setProperty("--next-progress", Math.max(0, state.autoplayCountdown / 5 * 100) + "%");
+    upNextTitle.textContent = state.nextVideo.title;
+    upNextMeta.textContent = state.nextVideo.channel + " - " + qualityLabel(state.nextVideo);
+    upNextThumb.innerHTML = thumbnailImage(state.nextVideo) + '<span class="quality-badge">' + qualityLabel(state.nextVideo) + '</span>';
+  }
+
+  function playNextVideo() {
+    if (!state.nextVideo) return;
+    var next = state.nextVideo;
+    clearAutoplayCountdown();
+    openVideo(next.id);
+  }
+
+  function cancelAutoplay() {
+    clearAutoplayCountdown();
+    playerOverlay.classList.remove("hidden");
+    playerAction.classList.add("paused");
+    playerActionText.textContent = "Replay";
+    player.focus();
+  }
+
+  function showUpNext(next) {
+    state.nextVideo = next;
+    state.autoplayCountdown = 5;
+    window.clearTimeout(state.overlayTimer);
+    playerOverlay.classList.add("hidden");
+    upNextOverlay.hidden = false;
+    renderUpNext();
+    playNextButton.focus();
+    state.autoplayTimer = window.setInterval(function () {
+      state.autoplayCountdown -= 1;
+      renderUpNext();
+      if (state.autoplayCountdown <= 0) playNextVideo();
+    }, 1000);
   }
 
   function openVideo(videoId) {
@@ -380,6 +472,7 @@
       return item.id === videoId;
     });
     if (!video) return;
+    clearAutoplayCountdown();
     state.currentVideo = video;
     player.src = video.url;
     playerTitle.textContent = video.title;
@@ -395,6 +488,7 @@
 
   function closePlayer() {
     if (playerPanel.hidden) return;
+    clearAutoplayCountdown();
     player.pause();
     saveProgress(true);
     player.removeAttribute("src");
@@ -521,13 +615,15 @@
     updatePlayerControls();
     saveProgress(true);
     var next = nextAutoplayVideo();
-    if (next) openVideo(next.id);
+    if (next) showUpNext(next);
   });
   player.addEventListener("error", function () {
     showOffline("The video stream disconnected or could not be played.");
   });
   player.addEventListener("mousemove", showPlayerOverlay);
   player.addEventListener("click", showPlayerOverlay);
+  playNextButton.addEventListener("click", playNextVideo);
+  cancelNextButton.addEventListener("click", cancelAutoplay);
   loadBrandName();
 
   document.addEventListener("focusin", function (event) {
@@ -550,6 +646,23 @@
     };
 
     if (!playerPanel.hidden) {
+      if (!upNextOverlay.hidden) {
+        if (isOk && document.activeElement && document.activeElement.click) {
+          document.activeElement.click();
+          event.preventDefault();
+          return;
+        }
+        if (arrows[key]) {
+          moveFocus(arrows[key]);
+          event.preventDefault();
+          return;
+        }
+        if (isBack) {
+          cancelAutoplay();
+          event.preventDefault();
+          return;
+        }
+      }
       if (isOk) {
         togglePlayback();
         event.preventDefault();
@@ -589,11 +702,10 @@
       return;
     }
 
-    if (!libraryPanel.hidden && isBack && state.filter === "channel") {
-      state.filter = "channels";
-      state.channelId = "";
-      state.lastLibraryFocus = null;
-      render();
+    if (!libraryPanel.hidden && isBack && (state.filter === "channel" || state.filter === "channels")) {
+      state.suppressNextPop = true;
+      if (history.state && history.state.tvView === "channel") history.back();
+      goHome();
       event.preventDefault();
     } else if (!profilePanel.hidden && isBack) {
       show(libraryPanel);
@@ -603,7 +715,17 @@
   });
 
   window.addEventListener("popstate", function () {
-    if (!playerPanel.hidden) closePlayer();
+    if (state.suppressNextPop) {
+      state.suppressNextPop = false;
+      return;
+    }
+    if (!playerPanel.hidden) {
+      closePlayer();
+      return;
+    }
+    if (!libraryPanel.hidden && (state.filter === "channel" || state.filter === "channels")) {
+      goHome();
+    }
   });
 
   boot();

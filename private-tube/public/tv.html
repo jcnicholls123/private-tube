@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PrivateTube TV</title>
-    <link rel="stylesheet" href="/tv.css?v=20260626-tv-polish">
+    <link rel="stylesheet" href="/tv.css?v=20260626-settings-center">
   </head>
   <body>
     <main id="app" class="tv-shell">
@@ -57,7 +57,10 @@
       <section id="playerPanel" class="player-panel" hidden>
         <video id="player" autoplay playsinline></video>
         <div id="playerOverlay" class="player-copy">
-          <div class="player-main-action" id="playerAction">Pause</div>
+          <div class="player-main-action" id="playerAction">
+            <span class="player-action-icon"></span>
+            <span id="playerActionText">Pause</span>
+          </div>
           <div class="player-info">
             <h1 id="playerTitle"></h1>
             <p id="playerMeta"></p>
@@ -74,8 +77,25 @@
             <span>Back Library</span>
           </div>
         </div>
+        <div id="upNextOverlay" class="up-next-overlay" hidden>
+          <section class="up-next-card">
+            <div class="up-next-count">
+              <span id="upNextCount">5</span>
+            </div>
+            <div class="up-next-copy">
+              <p>Up next</p>
+              <h1 id="upNextTitle"></h1>
+              <span id="upNextMeta"></span>
+            </div>
+            <div id="upNextThumb" class="up-next-thumb"></div>
+            <div class="up-next-actions">
+              <button id="playNextButton" class="focus-card up-next-button primary" type="button">Play now</button>
+              <button id="cancelNextButton" class="focus-card up-next-button" type="button">Cancel</button>
+            </div>
+          </section>
+        </div>
       </section>
     </main>
-    <script src="/tv.js?v=20260626-tv-polish"></script>
+    <script src="/tv.js?v=20260626-settings-center"></script>
   </body>
 </html>

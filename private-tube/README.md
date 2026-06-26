@@ -114,6 +114,14 @@ ares-package .
 
 See `webos/README.md` for install commands.
 
+## Android TV App
+
+A native Android TV wrapper lives in `android-tv/`. It stores your internal PrivateTube URL, shows a short launch countdown, and opens the same `/tv.html` TV interface in a fullscreen WebView.
+
+Open `android-tv/` in Android Studio, build the `app` module, then install it on an Android TV device or emulator.
+
+See `android-tv/README.md` for build and install notes.
+
 ## Thumbnails
 
 Sidecar thumbnails are preferred:

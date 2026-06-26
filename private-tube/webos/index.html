@@ -11,20 +11,25 @@
       <section class="panel">
         <div class="brand">
           <span class="mark" aria-hidden="true"></span>
-          <span>PrivateTube TV</span>
+          <span>NichTube TV</span>
         </div>
-        <h1>Open TV mode</h1>
-        <p id="introText">Use your internal PrivateTube address. This app opens the TV UI with its own player, not Chromecast.</p>
+        <div class="launch-meter" aria-hidden="true">
+          <span id="countdownRing" style="--progress: 100%"><strong id="countdownText">3</strong></span>
+        </div>
+        <h1 id="headline">Opening TV mode</h1>
+        <p id="introText">Saved server loaded. Use Open now, or change the address before launch.</p>
         <label>
-          <span>Internal PrivateTube URL</span>
+          <span>Server URL</span>
           <input id="serverUrl" type="url" placeholder="http://10.69.24.3:3020" autofocus>
         </label>
         <div class="actions">
           <button id="openButton" type="button">Open</button>
-          <button id="saveButton" type="button">Save</button>
           <button id="changeButton" type="button">Change</button>
+          <button id="saveButton" type="button">Save</button>
+          <button id="clearButton" type="button">Clear</button>
         </div>
         <p id="status" class="status"></p>
+        <p class="version">v0.1.1</p>
       </section>
     </main>
     <script src="app.js"></script>
