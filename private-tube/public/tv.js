@@ -3,6 +3,7 @@
     filter: "all",
     channelId: "",
     library: { videos: [], channels: [] },
+    progress: [],
     profiles: [],
     selectedProfile: localStorage.getItem("pt-tv-profile") || "",
     brandName: "PrivateTube",
@@ -10,6 +11,7 @@
     theme: localStorage.getItem("pt-tv-theme") || "dark",
     currentVideo: null,
     nextVideo: null,
+    pendingStartAt: 0,
     autoplayCountdown: 0,
     lastProgressSave: 0,
     lastLibraryFocus: null,
@@ -34,7 +36,6 @@
   var player = document.querySelector("#player");
   var playerOverlay = document.querySelector("#playerOverlay");
   var playerAction = document.querySelector("#playerAction");
-  var playerActionText = document.querySelector("#playerActionText");
   var playerTitle = document.querySelector("#playerTitle");
   var playerMeta = document.querySelector("#playerMeta");
   var playerQuality = document.querySelector("#playerQuality");
@@ -182,6 +183,12 @@
       });
     }
     return videos;
+  }
+
+  function continueItems() {
+    return state.progress.filter(function (item) {
+      return item.video && item.position > 5 && (!item.duration || item.position < item.duration - 8);
+    }).slice(0, 8);
   }
 
   function focusFirst(selector) {
@@ -349,10 +356,21 @@
     var channel = state.library.channels.find(function (item) {
       return item.id === state.channelId;
     });
+    var resumeItems = state.filter === "all" ? continueItems() : [];
     viewTitle.textContent = state.filter === "channel" ? (channel && channel.name ? channel.name : "Channel") : state.filter === "recent" ? "Latest" : "Home";
     viewMeta.textContent = videos.length + " video" + (videos.length === 1 ? "" : "s");
     grid.className = "tv-grid";
-    grid.innerHTML = videos.map(function (video) {
+    grid.innerHTML = (resumeItems.length ? '<section class="continue-row">' +
+      '<div class="continue-heading"><h2>Continue watching</h2><span>' + resumeItems.length + ' video' + (resumeItems.length === 1 ? "" : "s") + '</span></div>' +
+      '<div class="continue-tv-grid">' + resumeItems.map(function (item) {
+        var percent = item.duration ? Math.max(2, Math.min(100, item.position / item.duration * 100)) : 0;
+        return '<button class="focus-card continue-tv-card" type="button" data-video="' + item.video.id + '" data-resume="' + Math.floor(item.position) + '" data-focus-id="continue-' + item.video.id + '">' +
+          '<span class="thumb">' + thumbnail(item.video) + '<span class="watch-progress"><span style="width: ' + percent + '%"></span></span></span>' +
+          '<strong>' + item.video.title + '</strong>' +
+          '<span>' + formatTime(item.position) + ' watched</span>' +
+        "</button>";
+      }).join("") + '</div>' +
+    '</section>' : "") + videos.map(function (video) {
       return '<button class="focus-card video-card" type="button" data-video="' + video.id + '" data-focus-id="video-' + video.id + '">' +
         '<span class="thumb">' + thumbnail(video) + "</span>" +
         "<strong>" + video.title + "</strong>" +
@@ -362,7 +380,7 @@
     grid.querySelectorAll("[data-video]").forEach(function (button) {
       button.addEventListener("click", function () {
         state.lastLibraryFocus = button.dataset.focusId;
-        openVideo(button.dataset.video);
+        openVideo(button.dataset.video, Number(button.dataset.resume) || 0);
       });
     });
     restoreLibraryFocus();
@@ -393,7 +411,7 @@
     currentTime.textContent = formatTime(position);
     durationTime.textContent = duration ? formatTime(duration) : "0:00";
     playerAction.classList.toggle("paused", player.paused);
-    playerActionText.textContent = player.paused ? "Play" : "Pause";
+    playerAction.setAttribute("aria-label", player.paused ? "Play" : "Pause");
   }
 
   function togglePlayback() {
@@ -448,7 +466,7 @@
     clearAutoplayCountdown();
     playerOverlay.classList.remove("hidden");
     playerAction.classList.add("paused");
-    playerActionText.textContent = "Replay";
+    playerAction.setAttribute("aria-label", "Replay");
     player.focus();
   }
 
@@ -467,13 +485,14 @@
     }, 1000);
   }
 
-  function openVideo(videoId) {
+  function openVideo(videoId, startAt) {
     var video = state.library.videos.find(function (item) {
       return item.id === videoId;
     });
     if (!video) return;
     clearAutoplayCountdown();
     state.currentVideo = video;
+    state.pendingStartAt = Number(startAt) || 0;
     player.src = video.url;
     playerTitle.textContent = video.title;
     playerMeta.textContent = video.channel;
@@ -490,11 +509,14 @@
     if (playerPanel.hidden) return;
     clearAutoplayCountdown();
     player.pause();
-    saveProgress(true);
+    var progressSave = saveProgress(true);
     player.removeAttribute("src");
     player.load();
-    show(libraryPanel);
-    restoreLibraryFocus();
+    progressSave.then(loadProgress).then(function () {
+      show(libraryPanel);
+      render();
+      restoreLibraryFocus();
+    });
   }
 
   function saveProgress(force) {
@@ -511,6 +533,14 @@
       }),
       keepalive: force
     }).catch(function () {});
+  }
+
+  function loadProgress() {
+    return api("/api/progress").then(function (result) {
+      state.progress = result.progress || [];
+    }).catch(function () {
+      state.progress = [];
+    });
   }
 
   function loadProfiles() {
@@ -541,8 +571,11 @@
   }
 
   function loadLibrary() {
-    return api("/api/library").then(function (library) {
-      state.library = library;
+    return Promise.all([
+      api("/api/library"),
+      loadProgress()
+    ]).then(function (results) {
+      state.library = results[0];
       show(libraryPanel);
       render();
     });
@@ -605,7 +638,13 @@
     updatePlayerControls();
     saveProgress(false);
   });
-  player.addEventListener("loadedmetadata", updatePlayerControls);
+  player.addEventListener("loadedmetadata", function () {
+    if (state.pendingStartAt > 5 && player.duration && state.pendingStartAt < player.duration - 5) {
+      player.currentTime = state.pendingStartAt;
+    }
+    state.pendingStartAt = 0;
+    updatePlayerControls();
+  });
   player.addEventListener("play", updatePlayerControls);
   player.addEventListener("pause", function () {
     updatePlayerControls();

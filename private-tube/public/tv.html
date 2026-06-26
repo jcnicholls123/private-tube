@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PrivateTube TV</title>
-    <link rel="stylesheet" href="/tv.css?v=20260626-settings-center">
+    <link rel="stylesheet" href="/tv.css?v=20260626-continue-icon">
   </head>
   <body>
     <main id="app" class="tv-shell">
@@ -57,9 +57,8 @@
       <section id="playerPanel" class="player-panel" hidden>
         <video id="player" autoplay playsinline></video>
         <div id="playerOverlay" class="player-copy">
-          <div class="player-main-action" id="playerAction">
+          <div class="player-main-action" id="playerAction" aria-label="Pause">
             <span class="player-action-icon"></span>
-            <span id="playerActionText">Pause</span>
           </div>
           <div class="player-info">
             <h1 id="playerTitle"></h1>
@@ -96,6 +95,6 @@
         </div>
       </section>
     </main>
-    <script src="/tv.js?v=20260626-settings-center"></script>
+    <script src="/tv.js?v=20260626-continue-icon"></script>
   </body>
 </html>

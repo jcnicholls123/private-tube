@@ -54,8 +54,8 @@ body.launching {
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 16px;
-  font-size: 28px;
+  gap: 22px;
+  font-size: 34px;
   font-weight: 900;
 }
 
@@ -63,9 +63,9 @@ body.launching {
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 54px;
-  height: 38px;
-  border-radius: 12px;
+  width: 84px;
+  height: 58px;
+  border-radius: 18px;
   background: var(--accent);
   box-shadow: 0 12px 28px rgba(255, 0, 51, 0.32);
 }
@@ -73,9 +73,9 @@ body.launching {
 .mark::before {
   content: "";
   margin-left: 4px;
-  border-top: 9px solid transparent;
-  border-bottom: 9px solid transparent;
-  border-left: 15px solid #fff;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+  border-left: 26px solid #fff;
 }
 
 h1 {
