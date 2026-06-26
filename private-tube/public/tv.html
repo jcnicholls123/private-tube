@@ -17,6 +17,12 @@
         <p id="loginStatus"></p>
       </section>
 
+      <section id="profilePanel" class="profile-panel" hidden>
+        <div class="brand"><span class="brand-mark"></span><span>PrivateTube</span></div>
+        <h1>Who's watching?</h1>
+        <div id="profileGrid" class="profile-grid"></div>
+      </section>
+
       <section id="libraryPanel" class="library-panel" hidden>
         <header class="tv-header">
           <div class="brand"><span class="brand-mark"></span><span>PrivateTube</span></div>
@@ -35,7 +41,7 @@
 
       <section id="playerPanel" class="player-panel" hidden>
         <video id="player" controls autoplay playsinline></video>
-        <div class="player-copy">
+        <div id="playerOverlay" class="player-copy">
           <h1 id="playerTitle"></h1>
           <p id="playerMeta"></p>
         </div>

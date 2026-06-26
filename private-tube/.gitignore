@@ -5,3 +5,4 @@ sqlite-test-data/
 setup-test-data/
 auth-rework-test-data/
 fallback-login-test-data/
+webos/*.ipk

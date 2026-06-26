@@ -175,6 +175,10 @@ function publicUser(user) {
   };
 }
 
+function progressUsername(session) {
+  return session?.profile || session?.username;
+}
+
 async function readJson(filePath, fallback) {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8"));
@@ -1219,7 +1223,7 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/progress") {
     if (req.method === "GET") {
-      const progress = getWatchProgress(session.username).map((item) => ({
+      const progress = getWatchProgress(progressUsername(session)).map((item) => ({
         ...item,
         video: library.videos.find((video) => video.id === item.videoId) || null
       })).filter((item) => item.video);
@@ -1228,9 +1232,27 @@ async function handleApi(req, res, url) {
 
     if (req.method === "POST") {
       const payload = await readBody(req);
-      saveWatchProgress(session.username, payload.videoId, payload.position, payload.duration);
+      saveWatchProgress(progressUsername(session), payload.videoId, payload.position, payload.duration);
       return sendJson(res, 200, { ok: true });
     }
+  }
+
+  if (url.pathname === "/api/tv/profiles" && req.method === "GET") {
+    return sendJson(res, 200, {
+      profiles: getUsers().map(publicUser),
+      selectedProfile: progressUsername(session)
+    });
+  }
+
+  if (url.pathname === "/api/tv/profile" && req.method === "POST") {
+    const payload = await readBody(req);
+    const profile = getUser(payload.username);
+    if (!profile) return sendJson(res, 404, { error: "Profile not found" });
+    const token = parseCookies(req).pt_session;
+    if (token && sessions.has(token)) {
+      sessions.set(token, { ...sessions.get(token), profile: profile.username });
+    }
+    return sendJson(res, 200, { selectedProfile: profile.username });
   }
 
   if (url.pathname.startsWith("/api/metadata/") && req.method === "POST") {

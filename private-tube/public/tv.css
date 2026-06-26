@@ -216,6 +216,9 @@ p {
 }
 
 .player-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
   min-height: 100vh;
   background: #000;
 }
@@ -223,14 +226,25 @@ p {
 video {
   display: block;
   width: 100vw;
-  height: calc(100vh - 150px);
+  height: 100vh;
   background: #000;
 }
 
 .player-copy {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: grid;
   gap: 8px;
-  padding: 24px 58px;
+  padding: 44px 58px 34px;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.84));
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+
+.player-copy.hidden {
+  opacity: 0;
 }
 
 .player-copy h1 {
