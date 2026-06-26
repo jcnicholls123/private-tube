@@ -1,4 +1,18 @@
 services:
+  metube:
+    image: ghcr.io/alexta69/metube:latest
+    container_name: metube
+    restart: unless-stopped
+    ports:
+      - "30094:8081"
+    environment:
+      UID: "568"
+      GID: "568"
+      UMASK: "022"
+    volumes:
+      # Change this to the dataset where downloads should be saved.
+      - /mnt/Media/downloads/YouTube:/downloads
+
   private-tube:
     image: ghcr.io/jcnicholls123/private-tube:latest
     container_name: private-tube
@@ -10,10 +24,13 @@ services:
       MEDIA_DIR: /media
       DATA_DIR: /data
       AUTH_ENABLED: "true"
+      METUBE_URL: http://metube:8081
       # Set to "true" only if you want retention rules to delete local files.
       ALLOW_DELETE: "false"
     volumes:
-      # Change this to the dataset where MeTube/Pinchflat saves videos.
+      # Change this to the dataset where MeTube saves videos.
       - /mnt/Media/downloads/YouTube:/media:ro
       # Change this to a persistent app config dataset.
       - /mnt/Media/apps/private-tube:/data
+    depends_on:
+      - metube

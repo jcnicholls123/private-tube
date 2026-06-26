@@ -6,7 +6,8 @@ services:
     ports:
       - "30094:8081"
     volumes:
-      - ./media:/downloads
+      # Change this Windows path to wherever you want YouTube downloads stored.
+      - C:/PrivateTube/downloads:/downloads
 
   private-tube:
     image: ghcr.io/jcnicholls123/private-tube:latest
@@ -19,10 +20,12 @@ services:
       MEDIA_DIR: /media
       DATA_DIR: /data
       AUTH_ENABLED: "true"
-      ALLOW_DELETE: "false"
       METUBE_URL: http://metube:8081
+      ALLOW_DELETE: "false"
     volumes:
-      - ./media:/media:ro
-      - ./data:/data
+      # Must be the same folder MeTube writes into.
+      - C:/PrivateTube/downloads:/media:ro
+      # Persistent PrivateTube users/settings/database.
+      - C:/PrivateTube/data:/data
     depends_on:
       - metube

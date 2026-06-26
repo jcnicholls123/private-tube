@@ -5,8 +5,13 @@ services:
     restart: unless-stopped
     ports:
       - "30094:8081"
+    environment:
+      UID: "1026"
+      GID: "100"
+      UMASK: "022"
     volumes:
-      - ./media:/downloads
+      # Change this to your Synology downloads folder.
+      - /volume1/docker/metube/downloads:/downloads
 
   private-tube:
     image: ghcr.io/jcnicholls123/private-tube:latest
@@ -19,10 +24,12 @@ services:
       MEDIA_DIR: /media
       DATA_DIR: /data
       AUTH_ENABLED: "true"
-      ALLOW_DELETE: "false"
       METUBE_URL: http://metube:8081
+      ALLOW_DELETE: "false"
     volumes:
-      - ./media:/media:ro
-      - ./data:/data
+      # Must be the same folder MeTube writes into.
+      - /volume1/docker/metube/downloads:/media:ro
+      # Persistent PrivateTube users/settings/database.
+      - /volume1/docker/private-tube/data:/data
     depends_on:
       - metube
