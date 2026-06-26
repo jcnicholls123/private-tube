@@ -1,0 +1,12 @@
+{
+  "id": "com.nichhome.privatetube",
+  "version": "0.1.0",
+  "vendor": "Nich Home",
+  "type": "web",
+  "main": "index.html",
+  "title": "PrivateTube",
+  "appDescription": "PrivateTube launcher for LG webOS TVs.",
+  "icon": "icon.svg",
+  "largeIcon": "icon.svg",
+  "resolution": "1920x1080"
+}

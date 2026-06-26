@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PrivateTube TV</title>
+    <link rel="stylesheet" href="/tv.css?v=20260626-webos-tv">
+  </head>
+  <body>
+    <main id="app" class="tv-shell">
+      <section id="loginPanel" class="login-panel" hidden>
+        <div class="brand"><span class="brand-mark"></span><span>PrivateTube</span></div>
+        <h1>Sign in</h1>
+        <input id="usernameInput" autocomplete="username" placeholder="Username">
+        <input id="passwordInput" autocomplete="current-password" type="password" placeholder="Password">
+        <button id="loginButton" type="button">Sign in</button>
+        <p id="loginStatus"></p>
+      </section>
+
+      <section id="libraryPanel" class="library-panel" hidden>
+        <header class="tv-header">
+          <div class="brand"><span class="brand-mark"></span><span>PrivateTube</span></div>
+          <div>
+            <h1 id="viewTitle">Home</h1>
+            <p id="viewMeta"></p>
+          </div>
+        </header>
+        <nav id="tabs" class="tabs">
+          <button type="button" data-filter="all">Home</button>
+          <button type="button" data-filter="recent">Latest</button>
+          <button type="button" data-filter="channels">Channels</button>
+        </nav>
+        <div id="grid" class="tv-grid"></div>
+      </section>
+
+      <section id="playerPanel" class="player-panel" hidden>
+        <video id="player" controls autoplay playsinline></video>
+        <div class="player-copy">
+          <h1 id="playerTitle"></h1>
+          <p id="playerMeta"></p>
+        </div>
+      </section>
+    </main>
+    <script src="/tv.js?v=20260626-webos-tv"></script>
+  </body>
+</html>

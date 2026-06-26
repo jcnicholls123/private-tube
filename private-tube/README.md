@@ -89,17 +89,30 @@ Use a capped option like 1080p or 720p when you want smaller files. For a WebM-o
 
 ## Chromecast
 
-By default, PrivateTube uses the address you opened it with. If Chromecast needs a different LAN URL, set it in the in-app Settings page.
+By default, PrivateTube uses the address you opened it with. If Chromecast needs a different URL, set it in the in-app Settings page.
 
 Use WebM or MP4 files for best playback support.
 
 Google Cast from the web works best from Chrome or Edge on desktop/Android. iPhone Safari and iPhone home-screen web apps do not support the Google Cast Web Sender SDK; use AirPlay from the iPhone video controls where available.
 
-If Chrome on Windows cannot cast, open PrivateTube using the TrueNAS LAN URL rather than `localhost` or `127.0.0.1`, and set the in-app Chromecast public URL to that same address, for example `http://10.69.24.3:3020`.
+If Chrome on Windows can cast a tab but the PrivateTube Cast button says the sender API is unavailable, use a trusted HTTPS URL such as a Cloudflare Tunnel hostname. Set the in-app Chromecast public URL to that HTTPS address.
 
 ## iPhone Home Screen
 
 Open PrivateTube in Safari, tap Share, then Add to Home Screen.
+
+## LG webOS TV App
+
+A small LG webOS launcher app lives in `webos/`. It stores your internal PrivateTube URL on the TV and opens the remote-friendly `/tv.html` interface full-screen.
+
+Use your internal URL, for example `http://10.69.24.3:3020`, then package it with LG's webOS CLI:
+
+```bash
+cd webos
+ares-package .
+```
+
+See `webos/README.md` for install commands.
 
 ## Thumbnails
 
