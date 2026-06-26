@@ -129,6 +129,8 @@
   }
 
   function qualityLabel(video) {
+    if (video.resolutionLabel) return video.resolutionLabel;
+    if (video.height) return video.height >= 2000 ? "4K" : video.height + "p";
     var text = [video.title, video.path, video.contentType].join(" ").toLowerCase();
     if (/2160|4k|uhd/.test(text)) return "4K";
     if (/1440|qhd/.test(text)) return "1440p";

@@ -810,6 +810,72 @@ function metadataDir() {
   return path.join(DATA_DIR, "metadata");
 }
 
+function probeDir() {
+  return path.join(DATA_DIR, "probe");
+}
+
+function probeCachePath(videoId) {
+  return path.join(probeDir(), `${videoId}.json`);
+}
+
+function resolutionLabel(width, height) {
+  const longEdge = Math.max(Number(width) || 0, Number(height) || 0);
+  const shortEdge = Math.min(Number(width) || 0, Number(height) || 0);
+  if (!longEdge || !shortEdge) return "";
+  if (longEdge >= 3800 || shortEdge >= 2000) return "4K";
+  if (shortEdge >= 1400) return "1440p";
+  if (shortEdge >= 1000) return "1080p";
+  if (shortEdge >= 700) return "720p";
+  if (shortEdge >= 470) return "480p";
+  if (shortEdge >= 350) return "360p";
+  return `${shortEdge}p`;
+}
+
+async function probeVideo(filePath, videoId, stats) {
+  const cachePath = probeCachePath(videoId);
+  try {
+    const cached = JSON.parse(await fs.readFile(cachePath, "utf8"));
+    if (cached.size === stats.size && cached.mtimeMs === stats.mtimeMs) return cached;
+  } catch {}
+
+  const probe = {
+    size: stats.size,
+    mtimeMs: stats.mtimeMs,
+    width: 0,
+    height: 0,
+    codec: "",
+    durationSeconds: 0,
+    resolutionLabel: ""
+  };
+
+  try {
+    const { stdout } = await execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_entries",
+      "stream=width,height,codec_name:format=duration",
+      "-of",
+      "json",
+      filePath
+    ], { timeout: 20000, maxBuffer: 1024 * 1024 });
+    const info = JSON.parse(stdout);
+    const stream = info.streams?.[0] || {};
+    probe.width = Number(stream.width) || 0;
+    probe.height = Number(stream.height) || 0;
+    probe.codec = stream.codec_name || "";
+    probe.durationSeconds = Math.round(Number(info.format?.duration) || 0);
+    probe.resolutionLabel = resolutionLabel(probe.width, probe.height);
+  } catch (error) {
+    console.warn(`Could not probe video ${filePath}: ${error.message}`);
+  }
+
+  await fs.mkdir(probeDir(), { recursive: true });
+  await fs.writeFile(cachePath, JSON.stringify(probe, null, 2));
+  return probe;
+}
+
 function generatedThumbnailPath(videoId) {
   return path.join(thumbnailDir(), `${videoId}.jpg`);
 }
@@ -882,6 +948,7 @@ async function scanLibrary(options = {}) {
     const id = Buffer.from(relativePath).toString("base64url");
     const thumbnail = await findThumbnail(filePath, relativePath) || await generateThumbnail(filePath, id);
     const metadata = await readVideoMetadata(filePath, id, relativePath);
+    const probe = await probeVideo(filePath, id, stats);
 
     const video = {
       id,
@@ -896,7 +963,12 @@ async function scanLibrary(options = {}) {
       description: metadata.description,
       sourceUrl: metadata.sourceUrl,
       uploadedAt: metadata.uploadedAt,
-      duration: metadata.duration,
+      duration: metadata.duration || (probe.durationSeconds ? String(probe.durationSeconds) : ""),
+      durationSeconds: probe.durationSeconds,
+      width: probe.width,
+      height: probe.height,
+      codec: probe.codec,
+      resolutionLabel: probe.resolutionLabel,
       youtubeId: metadata.youtubeId,
       hasDescription: Boolean(metadata.description),
       size: stats.size,

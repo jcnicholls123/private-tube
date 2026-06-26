@@ -53,6 +53,7 @@ function castAvailabilityHint() {
 
 function renderDescription(video) {
   const lines = [];
+  if (video.resolutionLabel) lines.push(`<strong>${video.resolutionLabel}${video.codec ? ` &middot; ${video.codec.toUpperCase()}` : ""}</strong>`);
   if (video.uploadedAt) lines.push(`<strong>Uploaded ${video.uploadedAt}</strong>`);
   if (video.sourceUrl) lines.push(`<a href="${video.sourceUrl}" target="_blank" rel="noreferrer">Original YouTube page</a>`);
   if (video.description) lines.push(`<p>${video.description.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replace(/\n/g, "<br>")}</p>`);

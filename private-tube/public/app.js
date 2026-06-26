@@ -311,7 +311,7 @@ function filteredVideos() {
 
 function videoMeta(video) {
   const date = video.uploadedAt || video.modifiedAt;
-  const parts = [formatDate(date), formatSize(video.size)].filter(Boolean);
+  const parts = [formatDate(date), video.resolutionLabel, formatSize(video.size)].filter(Boolean);
   return parts.join(" &middot; ");
 }
 
