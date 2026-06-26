@@ -216,6 +216,12 @@
     }).slice(0, 8);
   }
 
+  function progressVideoIds() {
+    return new Set(state.progress.map(function (item) {
+      return item.videoId;
+    }));
+  }
+
   function focusFirst(selector) {
     window.setTimeout(function () {
       var target = document.querySelector(selector || ".focus-card");
@@ -386,6 +392,7 @@
     });
     var resumeItems = state.filter === "all" ? continueItems() : [];
     var watched = new Set(state.watchedVideoIds || []);
+    var inProgress = progressVideoIds();
     viewTitle.textContent = state.filter === "channel" ? (channel && channel.name ? channel.name : "Channel") : state.filter === "recent" ? "Latest" : "Home";
     viewMeta.textContent = videos.length + " video" + (videos.length === 1 ? "" : "s");
     grid.className = "tv-grid";
@@ -394,14 +401,15 @@
       '<div class="continue-tv-grid">' + resumeItems.map(function (item) {
         var percent = item.duration ? Math.max(2, Math.min(100, item.position / item.duration * 100)) : 0;
         return '<button class="focus-card continue-tv-card" type="button" data-video="' + item.video.id + '" data-resume="' + Math.floor(item.position) + '" data-focus-id="continue-' + item.video.id + '">' +
-          '<span class="thumb">' + thumbnail(item.video) + '<span class="watch-progress"><span style="width: ' + percent + '%"></span></span></span>' +
+          '<span class="thumb">' + thumbnail(item.video) + '<span class="watched-tick in-progress" aria-label="In progress"><span></span>WATCHING</span><span class="watch-progress"><span style="width: ' + percent + '%"></span></span></span>' +
           '<strong>' + item.video.title + '</strong>' +
           '<span>' + formatTime(item.position) + ' watched</span>' +
         "</button>";
       }).join("") + '</div>' +
     '</section>' : "") + videos.map(function (video) {
+      var progressBadge = !watched.has(video.id) && inProgress.has(video.id);
       return '<button class="focus-card video-card' + (watched.has(video.id) ? " watched" : "") + '" type="button" data-video="' + video.id + '" data-focus-id="video-' + video.id + '">' +
-        '<span class="thumb">' + thumbnail(video) + (watched.has(video.id) ? '<span class="watched-tick" aria-label="Watched"><span></span>WATCHED</span>' : "") + "</span>" +
+        '<span class="thumb">' + thumbnail(video) + (watched.has(video.id) ? '<span class="watched-tick" aria-label="Watched"><span></span>WATCHED</span>' : "") + (progressBadge ? '<span class="watched-tick in-progress" aria-label="In progress"><span></span>WATCHING</span>' : "") + "</span>" +
         "<strong>" + video.title + "</strong>" +
         "<span>" + video.channel + "</span>" +
       "</button>";
@@ -420,9 +428,8 @@
     playerOverlay.classList.remove("hidden");
     window.clearTimeout(state.overlayTimer);
     state.overlayTimer = window.setTimeout(function () {
-      if (playerControlFocused()) return;
-      playerOverlay.classList.add("hidden");
-    }, 3500);
+      hidePlayerControls();
+    }, 10000);
   }
 
   function playerControlFocused() {
@@ -435,6 +442,8 @@
   }
 
   function hidePlayerControls() {
+    if (playerPanel.hidden || !upNextOverlay.hidden) return;
+    window.clearTimeout(state.overlayTimer);
     playerOverlay.classList.add("hidden");
     player.focus();
   }
@@ -626,6 +635,7 @@
 
   function closePlayer() {
     if (playerPanel.hidden) return;
+    window.clearTimeout(state.overlayTimer);
     clearAutoplayCountdown();
     player.pause();
     var progressSave = saveProgress(true);
@@ -893,7 +903,7 @@
         return;
       }
       if (isBack) {
-        if (playerControlFocused()) {
+        if (!playerOverlay.classList.contains("hidden")) {
           hidePlayerControls();
           event.preventDefault();
           return;

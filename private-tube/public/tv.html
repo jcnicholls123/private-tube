@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PrivateTube TV</title>
-    <link rel="stylesheet" href="/tv.css?v=20260626-watched-scrub">
+    <link rel="stylesheet" href="/tv.css?v=20260626-centered-player-controls">
   </head>
   <body>
     <main id="app" class="tv-shell">
@@ -58,18 +58,18 @@
       <section id="playerPanel" class="player-panel" hidden>
         <video id="player" autoplay playsinline></video>
         <div id="playerOverlay" class="player-copy">
-          <button class="focus-card player-main-action" id="playerAction" type="button" aria-label="Pause">
-            <span class="player-action-icon"></span>
-          </button>
+          <div class="player-center-controls">
+            <button id="previousVideoButton" class="focus-card transport-button" type="button" aria-label="Previous video"><span class="transport-icon previous"></span><span class="transport-label">Previous</span></button>
+            <button class="focus-card player-main-action" id="playerAction" type="button" aria-label="Pause">
+              <span class="player-action-icon"></span>
+            </button>
+            <button id="nextVideoButton" class="focus-card transport-button" type="button" aria-label="Next video"><span class="transport-icon next"></span><span class="transport-label">Next</span></button>
+          </div>
           <div class="player-info">
             <h1 id="playerTitle"></h1>
             <p id="playerMeta"></p>
           </div>
           <div id="playerQuality" class="quality-chip">WEBM</div>
-          <div class="player-transport">
-            <button id="previousVideoButton" class="focus-card transport-button" type="button" aria-label="Previous video"><span class="transport-icon previous"></span><span>Previous</span></button>
-            <button id="nextVideoButton" class="focus-card transport-button" type="button" aria-label="Next video"><span class="transport-icon next"></span><span>Next</span></button>
-          </div>
           <div class="player-progress">
             <span id="currentTime">0:00</span>
             <button id="scrubButton" class="focus-card progress-track scrub-control" type="button" aria-label="Seek bar"><span id="progressFill"></span></button>
@@ -102,6 +102,6 @@
         </div>
       </section>
     </main>
-    <script src="/tv.js?v=20260626-watched-scrub"></script>
+    <script src="/tv.js?v=20260626-centered-player-controls"></script>
   </body>
 </html>
