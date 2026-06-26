@@ -1016,8 +1016,10 @@ body.shorts-mode .content {
   display: block;
   height: 100svh;
   overflow-y: auto;
-  scroll-snap-type: y mandatory;
+  scroll-snap-type: y proximity;
   overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   background: #050505;
   scrollbar-width: none;
 }
@@ -1033,8 +1035,9 @@ body.shorts-mode .content {
   height: 100svh;
   min-height: 540px;
   scroll-snap-align: start;
-  scroll-snap-stop: always;
   overflow: hidden;
+  contain: layout paint size;
+  content-visibility: auto;
   background:
     radial-gradient(circle at 50% 12%, rgba(255, 0, 51, 0.18), transparent 28%),
     #050505;
@@ -1046,7 +1049,8 @@ body.shorts-mode .content {
   max-height: 100svh;
   background: #000;
   object-fit: cover;
-  box-shadow: 0 0 80px rgba(0, 0, 0, 0.55);
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .shorts-scrim {
@@ -1134,7 +1138,6 @@ body.shorts-mode .content {
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
   cursor: pointer;
-  backdrop-filter: blur(12px);
 }
 
 .shorts-exit:hover {
@@ -1153,7 +1156,6 @@ body.shorts-mode .content {
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
   cursor: pointer;
-  backdrop-filter: blur(12px);
 }
 
 .shorts-actions button:hover,

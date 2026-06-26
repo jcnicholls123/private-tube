@@ -25,6 +25,7 @@ const THUMBNAIL_TIME = process.env.THUMBNAIL_TIME || "00:00:05";
 const METADATA_FETCH_ENABLED = process.env.METADATA_FETCH_ENABLED !== "false";
 const AUTO_METADATA_FETCH = process.env.AUTO_METADATA_FETCH !== "false";
 const AUTO_METADATA_FETCH_LIMIT = Number(process.env.AUTO_METADATA_FETCH_LIMIT || 12);
+const SESSION_MAX_AGE_SECONDS = Number(process.env.SESSION_MAX_AGE_SECONDS || 365 * 24 * 60 * 60);
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi"]);
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
@@ -152,7 +153,7 @@ function appendCookie(res, cookie) {
 }
 
 function setSessionCookie(res, token) {
-  appendCookie(res, `pt_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`);
+  appendCookie(res, `pt_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}`);
 }
 
 function setTvTokenCookie(res, token) {
@@ -169,6 +170,7 @@ function getSession(req) {
   const cookies = parseCookies(req);
   const token = cookies.pt_session;
   if (token && sessions.has(token)) return sessions.get(token);
+  if (token) return getPersistentSession(token);
   if (cookies.pt_tv_token) return getTvTokenSession(cookies.pt_tv_token);
   return null;
 }
@@ -301,6 +303,15 @@ function initSchema() {
     last_used_at TEXT,
     user_agent TEXT
   )`);
+  run(`CREATE TABLE IF NOT EXISTS user_sessions (
+    token_hash TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    profile TEXT,
+    created_at TEXT NOT NULL,
+    last_used_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    user_agent TEXT
+  )`);
 }
 
 function getSecret(key) {
@@ -382,6 +393,7 @@ function deleteUser(username) {
   run("DELETE FROM users WHERE username = ?", [username]);
   run("DELETE FROM tv_tokens WHERE username = ?", [username]);
   run("DELETE FROM user_preferences WHERE username = ?", [username]);
+  run("DELETE FROM user_sessions WHERE username = ?", [username]);
 }
 
 function setupRequired() {
@@ -479,6 +491,64 @@ function createTvToken(username, userAgent = "") {
   run(`INSERT INTO tv_tokens (token_hash, username, created_at, last_used_at, user_agent)
     VALUES (?, ?, ?, ?, ?)`, [hashToken(token), username, now, now, userAgent]);
   return token;
+}
+
+function createSession(username, userAgent = "", profile = "") {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const now = new Date();
+  const expires = new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000);
+  run(`INSERT INTO user_sessions (token_hash, username, profile, created_at, last_used_at, expires_at, user_agent)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+    hashToken(token),
+    username,
+    profile || null,
+    now.toISOString(),
+    now.toISOString(),
+    expires.toISOString(),
+    userAgent
+  ]);
+  return token;
+}
+
+function sessionFromUser(user, profile = "") {
+  return {
+    username: user.username,
+    role: user.role || "viewer",
+    ...(profile ? { profile } : {})
+  };
+}
+
+function getPersistentSession(token) {
+  const tokenHash = hashToken(token);
+  const remembered = get("SELECT username, profile, expires_at AS expiresAt FROM user_sessions WHERE token_hash = ?", [tokenHash]);
+  if (!remembered) return null;
+  if (Date.now() > new Date(remembered.expiresAt).getTime()) {
+    run("DELETE FROM user_sessions WHERE token_hash = ?", [tokenHash]);
+    return null;
+  }
+  const user = getUser(remembered.username);
+  if (!user) {
+    run("DELETE FROM user_sessions WHERE token_hash = ?", [tokenHash]);
+    return null;
+  }
+  run("UPDATE user_sessions SET last_used_at = ? WHERE token_hash = ?", [new Date().toISOString(), tokenHash]);
+  const session = sessionFromUser(user, remembered.profile || "");
+  sessions.set(token, session);
+  return session;
+}
+
+function updatePersistentSessionProfile(token, profile) {
+  if (!token) return;
+  run("UPDATE user_sessions SET profile = ?, last_used_at = ? WHERE token_hash = ?", [
+    profile || null,
+    new Date().toISOString(),
+    hashToken(token)
+  ]);
+}
+
+function deletePersistentSession(token) {
+  if (!token) return;
+  run("DELETE FROM user_sessions WHERE token_hash = ?", [hashToken(token)]);
 }
 
 function getTvTokenSession(token) {
@@ -1312,8 +1382,8 @@ async function handleApi(req, res, url) {
       });
       if (payload.metubeUrl) setAppSetting("metube_url", String(payload.metubeUrl).replace(/\/$/, ""));
       if (payload.publicUrl) setAppSetting("public_url", String(payload.publicUrl).replace(/\/$/, ""));
-      const token = crypto.randomBytes(32).toString("base64url");
       const session = { username: payload.username, role: "admin" };
+      const token = createSession(payload.username, req.headers["user-agent"] || "");
       sessions.set(token, session);
       setSessionCookie(res, token);
       return sendJson(res, 201, { ok: true, user: session });
@@ -1330,8 +1400,8 @@ async function handleApi(req, res, url) {
     if (!user || !verifyPassword(payload.password || "", user.passwordHash)) {
       return sendJson(res, 401, { error: "Invalid username or password" });
     }
-    const token = crypto.randomBytes(32).toString("base64url");
-    const session = { username: user.username, role: user.role || "viewer" };
+    const token = createSession(user.username, req.headers["user-agent"] || "");
+    const session = sessionFromUser(user);
     sessions.set(token, session);
     setSessionCookie(res, token);
     if (payload.remember) {
@@ -1343,6 +1413,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/logout" && req.method === "POST") {
     const token = parseCookies(req).pt_session;
     if (token) sessions.delete(token);
+    deletePersistentSession(token);
     clearSessionCookie(res);
     return sendJson(res, 200, { ok: true });
   }
@@ -1423,8 +1494,9 @@ async function handleApi(req, res, url) {
     const token = parseCookies(req).pt_session;
     if (token && sessions.has(token)) {
       sessions.set(token, { ...sessions.get(token), profile: profile.username });
+      updatePersistentSessionProfile(token, profile.username);
     } else {
-      const newToken = crypto.randomBytes(32).toString("base64url");
+      const newToken = createSession(session.username, req.headers["user-agent"] || "", profile.username);
       sessions.set(newToken, { username: session.username, role: session.role || "viewer", profile: profile.username });
       setSessionCookie(res, newToken);
     }
@@ -1582,8 +1654,8 @@ async function handleFormLogin(req, res) {
     if (!user || !verifyPassword(payload.password || "", user.passwordHash)) {
       return redirect(res, "/login.html?error=1");
     }
-    const token = crypto.randomBytes(32).toString("base64url");
-    const session = { username: user.username, role: user.role || "viewer" };
+    const token = createSession(user.username, req.headers["user-agent"] || "");
+    const session = sessionFromUser(user);
     sessions.set(token, session);
     setSessionCookie(res, token);
     return redirect(res, "/");
@@ -1610,8 +1682,8 @@ async function handleFormSetup(req, res) {
     if (payload.metubeUrl) setAppSetting("metube_url", String(payload.metubeUrl).replace(/\/$/, ""));
     if (payload.publicUrl) setAppSetting("public_url", String(payload.publicUrl).replace(/\/$/, ""));
 
-    const token = crypto.randomBytes(32).toString("base64url");
     const session = { username: payload.username, role: "admin" };
+    const token = createSession(payload.username, req.headers["user-agent"] || "");
     sessions.set(token, session);
     setSessionCookie(res, token);
     return redirect(res, "/");

@@ -1,6 +1,6 @@
 {
   "name": "private-tube",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A lightweight self-hosted YouTube-style web app for local video libraries.",
   "type": "module",
   "scripts": {

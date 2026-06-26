@@ -419,27 +419,39 @@ function renderShortsFeed(videos) {
 
   const players = [...grid.querySelectorAll(".shorts-player")];
   setShortsMuted(state.shortsMuted, players);
-  const activate = (player) => {
+  let activeIndex = -1;
+  const preloadAround = (index) => {
+    [index - 1, index, index + 1, index + 2].forEach((itemIndex) => {
+      const player = players[itemIndex];
+      if (player && !player.src) player.src = player.dataset.src;
+    });
+  };
+  const activate = (player, index) => {
     if (!player) return;
+    if (activeIndex === index && !player.paused) return;
+    activeIndex = index;
     if (!player.src) player.src = player.dataset.src;
-    players.forEach((item) => {
-      if (item !== player) item.pause();
+    preloadAround(index);
+    players.forEach((item, itemIndex) => {
+      if (itemIndex !== index) item.pause();
     });
     player.play().catch(() => {});
   };
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting && entry.intersectionRatio > 0.62) {
-        activate(entry.target.querySelector("video"));
-      }
+  const activateNearest = () => {
+    const height = Math.max(1, grid.clientHeight);
+    const index = Math.max(0, Math.min(players.length - 1, Math.round(grid.scrollTop / height)));
+    activate(players[index], index);
+  };
+  let scrollFrame = 0;
+  grid.addEventListener("scroll", () => {
+    if (scrollFrame) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = 0;
+      activateNearest();
     });
-  }, { threshold: [0.62] });
-
-  grid.querySelectorAll(".shorts-reel").forEach((card) => observer.observe(card));
-  if (players[0]) {
-    players[0].src = players[0].dataset.src;
-    players[0].play().catch(() => {});
-  }
+  }, { passive: true });
+  preloadAround(0);
+  activate(players[0], 0);
 
   grid.querySelectorAll("[data-channel]").forEach((button) => {
     button.addEventListener("click", () => selectFilter("channel", button.dataset.channel));
