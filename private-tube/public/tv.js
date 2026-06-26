@@ -7,6 +7,7 @@
     selectedProfile: localStorage.getItem("pt-tv-profile") || "",
     brandName: "PrivateTube",
     autoplay: localStorage.getItem("pt-tv-autoplay") || "channel",
+    theme: localStorage.getItem("pt-tv-theme") || "dark",
     currentVideo: null,
     lastProgressSave: 0,
     lastLibraryFocus: null,
@@ -14,6 +15,10 @@
   };
 
   var loginPanel = document.querySelector("#loginPanel");
+  var startupPanel = document.querySelector("#startupPanel");
+  var offlinePanel = document.querySelector("#offlinePanel");
+  var offlineStatus = document.querySelector("#offlineStatus");
+  var retryButton = document.querySelector("#retryButton");
   var profilePanel = document.querySelector("#profilePanel");
   var libraryPanel = document.querySelector("#libraryPanel");
   var playerPanel = document.querySelector("#playerPanel");
@@ -27,6 +32,7 @@
   var playerAction = document.querySelector("#playerAction");
   var playerTitle = document.querySelector("#playerTitle");
   var playerMeta = document.querySelector("#playerMeta");
+  var playerQuality = document.querySelector("#playerQuality");
   var currentTime = document.querySelector("#currentTime");
   var durationTime = document.querySelector("#durationTime");
   var progressFill = document.querySelector("#progressFill");
@@ -42,17 +48,37 @@
       return response.json().catch(function () {
         return {};
       }).then(function (result) {
-        if (!response.ok) throw new Error(result.error || "Request failed");
+        if (!response.ok) {
+          var httpError = new Error(result.error || "Request failed");
+          httpError.httpStatus = response.status;
+          throw httpError;
+        }
         return result;
       });
+    }).catch(function (error) {
+      if (!error.httpStatus) showOffline(error.message || "PrivateTube is not reachable from this TV.");
+      throw error;
     });
   }
 
   function show(panel) {
+    startupPanel.hidden = true;
+    offlinePanel.hidden = true;
     loginPanel.hidden = panel !== loginPanel;
     profilePanel.hidden = panel !== profilePanel;
     libraryPanel.hidden = panel !== libraryPanel;
     playerPanel.hidden = panel !== playerPanel;
+  }
+
+  function showOffline(message) {
+    startupPanel.hidden = true;
+    offlinePanel.hidden = false;
+    loginPanel.hidden = true;
+    profilePanel.hidden = true;
+    libraryPanel.hidden = true;
+    playerPanel.hidden = true;
+    offlineStatus.textContent = message || "PrivateTube is not reachable from this TV.";
+    retryButton.focus();
   }
 
   function brandStorageKey() {
@@ -65,6 +91,12 @@
       item.textContent = name;
     });
     document.title = name + " TV";
+  }
+
+  function applyTheme(theme) {
+    state.theme = theme || state.theme || "dark";
+    document.documentElement.dataset.theme = state.theme;
+    localStorage.setItem("pt-tv-theme", state.theme);
   }
 
   function loadBrandName() {
@@ -96,9 +128,22 @@
     return minutes + ":" + String(secs).padStart(2, "0");
   }
 
+  function qualityLabel(video) {
+    var text = [video.title, video.path, video.contentType].join(" ").toLowerCase();
+    if (/2160|4k|uhd/.test(text)) return "4K";
+    if (/1440|qhd/.test(text)) return "1440p";
+    if (/1080|fhd/.test(text)) return "1080p";
+    if (/720|hd/.test(text)) return "720p";
+    if (/480/.test(text)) return "480p";
+    if (/webm/.test(text)) return "WEBM";
+    if (/mp4|m4v/.test(text)) return "MP4";
+    if (/mkv/.test(text)) return "MKV";
+    return "VIDEO";
+  }
+
   function thumbnail(video) {
-    if (video.thumbnail) return '<img src="' + video.thumbnail + '" alt="">';
-    return '<span class="thumb-fallback"></span>';
+    var media = video.thumbnail ? '<img src="' + video.thumbnail + '" alt="">' : '<span class="thumb-fallback"></span>';
+    return media + '<span class="quality-badge">' + qualityLabel(video) + '</span>';
   }
 
   function channelThumb(channel) {
@@ -200,6 +245,11 @@
           '<button class="focus-card preset-action" type="button" data-autoplay="channel">Same channel</button>' +
           '<button class="focus-card preset-action" type="button" data-autoplay="view">Current view</button>' +
         '</div>' +
+        '<h2>Theme</h2>' +
+        '<div class="preset-row">' +
+          '<button class="focus-card preset-action" type="button" data-theme="dark">Night</button>' +
+          '<button class="focus-card preset-action" type="button" data-theme="light">Day</button>' +
+        '</div>' +
         '<button class="focus-card settings-action" type="button" id="profileButton">Switch profile</button>' +
       "</section>";
       document.querySelector("#saveBrandButton").addEventListener("click", function () {
@@ -216,6 +266,13 @@
         button.addEventListener("click", function () {
           state.autoplay = button.dataset.autoplay;
           localStorage.setItem("pt-tv-autoplay", state.autoplay);
+          render();
+        });
+      });
+      grid.querySelectorAll("[data-theme]").forEach(function (button) {
+        button.classList.toggle("active", button.dataset.theme === state.theme);
+        button.addEventListener("click", function () {
+          applyTheme(button.dataset.theme);
           render();
         });
       });
@@ -325,6 +382,7 @@
     player.src = video.url;
     playerTitle.textContent = video.title;
     playerMeta.textContent = video.channel;
+    playerQuality.textContent = qualityLabel(video);
     show(playerPanel);
     history.pushState({ tvPlayer: true }, "", "#player");
     player.focus();
@@ -395,6 +453,7 @@
   }
 
   function boot() {
+    applyTheme();
     return api("/api/session").then(function (session) {
       if (session.setupRequired) {
         location.href = "/setup.html";
@@ -425,6 +484,18 @@
     });
   });
 
+  retryButton.addEventListener("click", function () {
+    startupPanel.hidden = false;
+    boot();
+  });
+
+  window.addEventListener("online", function () {
+    if (!offlinePanel.hidden) boot();
+  });
+  window.addEventListener("offline", function () {
+    showOffline("The TV network connection is offline.");
+  });
+
   tabs.querySelectorAll("button").forEach(function (button) {
     button.addEventListener("click", function () {
       state.lastLibraryFocus = null;
@@ -449,6 +520,9 @@
     saveProgress(true);
     var next = nextAutoplayVideo();
     if (next) openVideo(next.id);
+  });
+  player.addEventListener("error", function () {
+    showOffline("The video stream disconnected or could not be played.");
   });
   player.addEventListener("mousemove", showPlayerOverlay);
   player.addEventListener("click", showPlayerOverlay);

@@ -4,10 +4,24 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PrivateTube TV</title>
-    <link rel="stylesheet" href="/tv.css?v=20260626-tv-player-brand">
+    <link rel="stylesheet" href="/tv.css?v=20260626-tv-polish">
   </head>
   <body>
     <main id="app" class="tv-shell">
+      <section id="startupPanel" class="startup-panel">
+        <div class="startup-logo">
+          <span class="brand-mark"></span>
+          <strong data-brand-name>PrivateTube</strong>
+        </div>
+      </section>
+
+      <section id="offlinePanel" class="offline-panel" hidden>
+        <div class="brand"><span class="brand-mark"></span><span data-brand-name>PrivateTube</span></div>
+        <h1>Disconnected</h1>
+        <p id="offlineStatus">PrivateTube is not reachable from this TV.</p>
+        <button id="retryButton" class="focus-card settings-action" type="button">Retry</button>
+      </section>
+
       <section id="loginPanel" class="login-panel" hidden>
         <div class="brand"><span class="brand-mark"></span><span data-brand-name>PrivateTube</span></div>
         <h1>Sign in</h1>
@@ -48,6 +62,7 @@
             <h1 id="playerTitle"></h1>
             <p id="playerMeta"></p>
           </div>
+          <div id="playerQuality" class="quality-chip">WEBM</div>
           <div class="player-progress">
             <span id="currentTime">0:00</span>
             <div class="progress-track"><span id="progressFill"></span></div>
@@ -61,6 +76,6 @@
         </div>
       </section>
     </main>
-    <script src="/tv.js?v=20260626-tv-player-brand"></script>
+    <script src="/tv.js?v=20260626-tv-polish"></script>
   </body>
 </html>
