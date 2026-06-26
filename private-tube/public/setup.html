@@ -21,7 +21,7 @@
       <form class="login-box setup-box" method="post" action="/form-setup">
         <div class="login-brand">
           <span class="brand-mark" aria-hidden="true"></span>
-          <span>PrivateTube</span>
+          <span data-brand-name>PrivateTube</span>
         </div>
         <h1>Set up your library</h1>
         <input name="username" autocomplete="username" placeholder="Admin username" value="admin" required>
@@ -39,6 +39,9 @@
         document.querySelector("#setupStatus").textContent =
           error === "missing" ? "Username and password are required" : "Setup failed. Check container logs.";
       }
+      const brandName = localStorage.getItem("pt-brand-name") || "PrivateTube";
+      document.querySelectorAll("[data-brand-name]").forEach((item) => item.textContent = brandName);
+      document.title = "Set up - " + brandName;
     </script>
     <script src="/pwa.js" type="module"></script>
   </body>

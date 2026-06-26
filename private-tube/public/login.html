@@ -21,7 +21,7 @@
       <form class="login-box" method="post" action="/form-login">
         <div class="login-brand">
           <span class="brand-mark" aria-hidden="true"></span>
-          <span>PrivateTube</span>
+          <span data-brand-name>PrivateTube</span>
         </div>
         <h1>Sign in</h1>
         <input name="username" autocomplete="username" placeholder="Username" required>
@@ -34,6 +34,9 @@
       if (new URLSearchParams(location.search).has("error")) {
         document.querySelector("#fallbackStatus").textContent = "Invalid username or password";
       }
+      const brandName = localStorage.getItem("pt-brand-name") || "PrivateTube";
+      document.querySelectorAll("[data-brand-name]").forEach((item) => item.textContent = brandName);
+      document.title = "Sign in - " + brandName;
     </script>
     <script src="/pwa.js" type="module"></script>
   </body>

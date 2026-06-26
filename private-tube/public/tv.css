@@ -215,6 +215,82 @@ p {
   font-weight: 900;
 }
 
+.profile-panel {
+  display: grid;
+  gap: 34px;
+  padding: 72px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 28px;
+}
+
+.profile-card {
+  place-items: center;
+  min-height: 300px;
+  padding: 28px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 148px;
+  height: 148px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 66px;
+  font-weight: 900;
+}
+
+.settings-grid {
+  grid-template-columns: minmax(0, 760px);
+}
+
+.settings-card {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+  border-radius: 22px;
+  background: var(--surface);
+}
+
+.settings-card label {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-card label span {
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.settings-card input {
+  min-height: 68px;
+  border: 3px solid transparent;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 0 18px;
+  font-size: 26px;
+  outline: none;
+}
+
+.settings-action {
+  min-height: 66px;
+  padding: 0 24px;
+  background: var(--surface-2);
+  font-size: 24px;
+  font-weight: 900;
+  text-align: center;
+}
+
 .player-panel {
   position: fixed;
   inset: 0;
@@ -236,8 +312,10 @@ video {
   right: 0;
   bottom: 0;
   display: grid;
-  gap: 8px;
-  padding: 44px 58px 34px;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 18px 28px;
+  align-items: end;
+  padding: 120px 64px 42px;
   background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.84));
   transition: opacity 180ms ease;
   pointer-events: none;
@@ -247,11 +325,68 @@ video {
   opacity: 0;
 }
 
+.player-main-action {
+  display: grid;
+  place-items: center;
+  width: 124px;
+  height: 124px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.player-info {
+  min-width: 0;
+}
+
 .player-copy h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 34px;
+}
+
+.player-progress {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 88px;
+  gap: 18px;
+  align-items: center;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.progress-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.player-hints {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.player-hints span {
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .login-panel {

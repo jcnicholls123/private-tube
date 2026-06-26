@@ -18,6 +18,10 @@ let castReady = false;
 let lastProgressSave = 0;
 
 document.documentElement.dataset.theme = localStorage.getItem("pt-theme") || "dark";
+const appBrandName = localStorage.getItem("pt-brand-name") || "PrivateTube";
+document.querySelectorAll("[data-brand-name]").forEach((item) => {
+  item.textContent = appBrandName;
+});
 
 function isIOS() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -250,7 +254,7 @@ async function load() {
   const resumeAt = startAt || saved?.position || 0;
 
   currentVideo = video;
-  document.title = `${video.title} - PrivateTube`;
+  document.title = `${video.title} - ${appBrandName}`;
   player.src = video.url;
   player.addEventListener("loadedmetadata", () => {
     if (resumeAt > 5 && resumeAt < player.duration - 5) player.currentTime = resumeAt;

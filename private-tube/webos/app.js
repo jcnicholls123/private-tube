@@ -3,8 +3,10 @@
   var input = document.querySelector("#serverUrl");
   var openButton = document.querySelector("#openButton");
   var saveButton = document.querySelector("#saveButton");
-  var clearButton = document.querySelector("#clearButton");
+  var changeButton = document.querySelector("#changeButton");
   var status = document.querySelector("#status");
+  var introText = document.querySelector("#introText");
+  var autoOpenTimer = null;
 
   function normalizeUrl(value) {
     var trimmed = String(value || "").trim();
@@ -27,7 +29,7 @@
   }
 
   function saveUrl() {
-    const url = normalizeUrl(input.value);
+    var url = normalizeUrl(input.value);
     if (!url) {
       setStatus("Enter a valid internal PrivateTube URL.");
       return "";
@@ -39,10 +41,18 @@
   }
 
   function openPrivateTube() {
-    const url = saveUrl();
+    var url = saveUrl();
     if (!url) return;
     setStatus("Opening PrivateTube TV mode...");
     window.location.href = tvUrl(url);
+  }
+
+  function editUrl() {
+    window.clearTimeout(autoOpenTimer);
+    input.disabled = false;
+    input.focus();
+    input.select();
+    setStatus("Edit the internal URL, then Save or Open.");
   }
 
   function moveFocus(direction) {
@@ -53,16 +63,16 @@
   }
 
   input.value = localStorage.getItem(storageKey) || "";
-  if (input.value) setStatus("Saved URL loaded. Press Open.");
+  if (input.value) {
+    input.disabled = true;
+    introText.textContent = "Saved URL loaded. Opening TV mode automatically.";
+    setStatus("Press Change now if you need to edit the server URL.");
+    autoOpenTimer = window.setTimeout(openPrivateTube, 1600);
+  }
 
   openButton.addEventListener("click", openPrivateTube);
   saveButton.addEventListener("click", saveUrl);
-  clearButton.addEventListener("click", function () {
-    localStorage.removeItem(storageKey);
-    input.value = "";
-    input.focus();
-    setStatus("Cleared.");
-  });
+  changeButton.addEventListener("click", editUrl);
 
   document.addEventListener("keydown", function (event) {
     if (event.key === "Enter" && document.activeElement !== input) {
@@ -70,5 +80,6 @@
     }
     if (event.key === "ArrowDown" || event.key === "ArrowRight") moveFocus(1);
     if (event.key === "ArrowUp" || event.key === "ArrowLeft") moveFocus(-1);
+    if (event.key === "Escape" || event.key === "Backspace" || event.key === "BrowserBack") editUrl();
   });
 }());

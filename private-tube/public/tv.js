@@ -5,6 +5,7 @@
     library: { videos: [], channels: [] },
     profiles: [],
     selectedProfile: localStorage.getItem("pt-tv-profile") || "",
+    brandName: "PrivateTube",
     currentVideo: null,
     lastProgressSave: 0,
     lastLibraryFocus: null,
@@ -22,8 +23,12 @@
   var viewMeta = document.querySelector("#viewMeta");
   var player = document.querySelector("#player");
   var playerOverlay = document.querySelector("#playerOverlay");
+  var playerAction = document.querySelector("#playerAction");
   var playerTitle = document.querySelector("#playerTitle");
   var playerMeta = document.querySelector("#playerMeta");
+  var currentTime = document.querySelector("#currentTime");
+  var durationTime = document.querySelector("#durationTime");
+  var progressFill = document.querySelector("#progressFill");
   var loginStatus = document.querySelector("#loginStatus");
 
   function api(path, options) {
@@ -47,6 +52,47 @@
     profilePanel.hidden = panel !== profilePanel;
     libraryPanel.hidden = panel !== libraryPanel;
     playerPanel.hidden = panel !== playerPanel;
+  }
+
+  function brandStorageKey() {
+    return "pt-brand-name-" + (state.selectedProfile || "default");
+  }
+
+  function applyBrandName() {
+    var name = String(state.brandName || "PrivateTube").trim() || "PrivateTube";
+    document.querySelectorAll("[data-brand-name]").forEach(function (item) {
+      item.textContent = name;
+    });
+    document.title = name + " TV";
+  }
+
+  function loadBrandName() {
+    state.brandName = localStorage.getItem(brandStorageKey()) || localStorage.getItem("pt-brand-name") || "PrivateTube";
+    applyBrandName();
+  }
+
+  function saveBrandName(name) {
+    state.brandName = String(name || "").trim() || "PrivateTube";
+    localStorage.setItem(brandStorageKey(), state.brandName);
+    applyBrandName();
+    render();
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function formatTime(seconds) {
+    seconds = Math.max(0, Math.floor(seconds || 0));
+    var hours = Math.floor(seconds / 3600);
+    var minutes = Math.floor((seconds % 3600) / 60);
+    var secs = seconds % 60;
+    if (hours) return hours + ":" + String(minutes).padStart(2, "0") + ":" + String(secs).padStart(2, "0");
+    return minutes + ":" + String(secs).padStart(2, "0");
   }
 
   function thumbnail(video) {
@@ -135,6 +181,28 @@
       button.classList.toggle("active", button.dataset.filter === state.filter || (state.filter === "channel" && button.dataset.filter === "channels"));
     });
 
+    if (state.filter === "settings") {
+      viewTitle.textContent = "Settings";
+      viewMeta.textContent = "Personalise this TV profile";
+      grid.className = "tv-grid settings-grid";
+      grid.innerHTML = '<section class="settings-card">' +
+        '<label><span>App name</span><input id="brandNameInput" value="' + escapeHtml(state.brandName) + '" placeholder="PrivateTube"></label>' +
+        '<button class="focus-card settings-action" type="button" id="saveBrandButton">Save name</button>' +
+        '<button class="focus-card settings-action" type="button" id="profileButton">Switch profile</button>' +
+      "</section>";
+      document.querySelector("#saveBrandButton").addEventListener("click", function () {
+        saveBrandName(document.querySelector("#brandNameInput").value);
+      });
+      document.querySelector("#profileButton").addEventListener("click", function () {
+        state.selectedProfile = "";
+        localStorage.removeItem("pt-tv-profile");
+        show(profilePanel);
+        focusFirst(".profile-card");
+      });
+      focusFirst("#brandNameInput");
+      return;
+    }
+
     if (state.filter === "channels") {
       viewTitle.textContent = "Channels";
       viewMeta.textContent = state.library.channels.length + " channel" + (state.library.channels.length === 1 ? "" : "s");
@@ -188,6 +256,30 @@
     }, 3500);
   }
 
+  function updatePlayerControls() {
+    var duration = player.duration || 0;
+    var position = player.currentTime || 0;
+    var percent = duration ? Math.max(0, Math.min(100, position / duration * 100)) : 0;
+    progressFill.style.width = percent + "%";
+    currentTime.textContent = formatTime(position);
+    durationTime.textContent = duration ? formatTime(duration) : "0:00";
+    playerAction.textContent = player.paused ? "Play" : "Pause";
+  }
+
+  function togglePlayback() {
+    if (player.paused) player.play().catch(function () {});
+    else player.pause();
+    updatePlayerControls();
+    showPlayerOverlay();
+  }
+
+  function seekBy(seconds) {
+    if (!player.duration) return;
+    player.currentTime = Math.max(0, Math.min(player.duration - 1, player.currentTime + seconds));
+    updatePlayerControls();
+    showPlayerOverlay();
+  }
+
   function openVideo(videoId) {
     var video = state.library.videos.find(function (item) {
       return item.id === videoId;
@@ -201,6 +293,7 @@
     history.pushState({ tvPlayer: true }, "", "#player");
     player.focus();
     player.play().catch(function () {});
+    updatePlayerControls();
     showPlayerOverlay();
   }
 
@@ -250,6 +343,7 @@
     }).then(function () {
       state.selectedProfile = username;
       localStorage.setItem("pt-tv-profile", username);
+      loadBrandName();
       return loadLibrary();
     }).catch(function (error) {
       if (!quiet) loginStatus.textContent = error.message;
@@ -303,11 +397,23 @@
     });
   });
 
-  player.addEventListener("timeupdate", function () { saveProgress(false); });
-  player.addEventListener("pause", function () { saveProgress(true); });
-  player.addEventListener("ended", function () { saveProgress(true); });
+  player.addEventListener("timeupdate", function () {
+    updatePlayerControls();
+    saveProgress(false);
+  });
+  player.addEventListener("loadedmetadata", updatePlayerControls);
+  player.addEventListener("play", updatePlayerControls);
+  player.addEventListener("pause", function () {
+    updatePlayerControls();
+    saveProgress(true);
+  });
+  player.addEventListener("ended", function () {
+    updatePlayerControls();
+    saveProgress(true);
+  });
   player.addEventListener("mousemove", showPlayerOverlay);
   player.addEventListener("click", showPlayerOverlay);
+  loadBrandName();
 
   document.addEventListener("focusin", function (event) {
     if (libraryPanel.hidden) return;
@@ -328,6 +434,34 @@
       ArrowRight: "right"
     };
 
+    if (!playerPanel.hidden) {
+      if (isOk) {
+        togglePlayback();
+        event.preventDefault();
+        return;
+      }
+      if (key === "ArrowLeft") {
+        seekBy(-10);
+        event.preventDefault();
+        return;
+      }
+      if (key === "ArrowRight") {
+        seekBy(10);
+        event.preventDefault();
+        return;
+      }
+      if (key === "ArrowDown" || key === "ArrowUp") {
+        showPlayerOverlay();
+        event.preventDefault();
+        return;
+      }
+      if (isBack) {
+        closePlayer();
+        event.preventDefault();
+        return;
+      }
+    }
+
     if (isOk && document.activeElement && document.activeElement.click && document.activeElement !== player) {
       document.activeElement.click();
       event.preventDefault();
@@ -340,10 +474,7 @@
       return;
     }
 
-    if (!playerPanel.hidden && (isBack || key === "ArrowDown" || key === "ArrowUp")) {
-      closePlayer();
-      event.preventDefault();
-    } else if (!libraryPanel.hidden && isBack && state.filter === "channel") {
+    if (!libraryPanel.hidden && isBack && state.filter === "channel") {
       state.filter = "channels";
       state.channelId = "";
       state.lastLibraryFocus = null;

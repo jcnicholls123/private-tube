@@ -56,6 +56,27 @@ function applyTheme(theme = localStorage.getItem("pt-theme") || "dark") {
   });
 }
 
+function brandName() {
+  return localStorage.getItem("pt-brand-name") || "PrivateTube";
+}
+
+function applyBrandName(name = brandName()) {
+  const displayName = String(name || "").trim() || "PrivateTube";
+  localStorage.setItem("pt-brand-name", displayName);
+  document.querySelectorAll("[data-brand-name]").forEach((item) => {
+    item.textContent = displayName;
+  });
+  document.title = displayName;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 function closeMenu() {
   appMenu.setAttribute("hidden", "");
   menuBackdrop.setAttribute("hidden", "");
@@ -548,6 +569,15 @@ function renderSettings() {
         </div>
       </section>
       <section class="settings-card">
+        <h2>Branding</h2>
+        <p>Name this app on this browser.</p>
+        <label class="settings-inline-label">
+          <span>Display name</span>
+          <input id="brandNameInput" type="text" value="${escapeHtml(brandName())}" placeholder="PrivateTube">
+        </label>
+        <button id="brandNameButton" class="secondary-button" type="button">Save name</button>
+      </section>
+      <section class="settings-card">
         <h2>Notifications</h2>
         <p>${notificationStatusText()}</p>
         <button id="notificationButton" class="secondary-button" type="button" ${canUseBrowserNotifications() ? "" : "disabled"}>${canUseBrowserNotifications() ? "Enable browser notifications" : "Browser notifications unavailable"}</button>
@@ -601,6 +631,11 @@ function renderSettings() {
   });
 
   document.querySelector("#notificationButton").addEventListener("click", enableNotifications);
+  document.querySelector("#brandNameButton").addEventListener("click", () => {
+    applyBrandName(document.querySelector("#brandNameInput").value);
+    notify("Name saved", "success");
+    render();
+  });
 
   document.querySelector("#settingsForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -693,6 +728,7 @@ async function loadLibrary() {
 
 async function boot() {
   applyTheme();
+  applyBrandName();
   state.session = await api("/api/session");
   if (state.session.setupRequired) {
     location.href = "/setup.html";

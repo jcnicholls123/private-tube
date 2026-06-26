@@ -1061,6 +1061,23 @@ button {
   text-transform: uppercase;
 }
 
+.settings-inline-label {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settings-inline-label input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 70%, var(--bg));
+  color: var(--text);
+  padding: 0 12px;
+  outline: none;
+}
+
 .cast-settings-form {
   grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) 140px;
 }
