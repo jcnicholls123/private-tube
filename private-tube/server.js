@@ -268,6 +268,14 @@ function initSchema() {
     created_at TEXT NOT NULL,
     updated_at TEXT
   )`);
+  run(`CREATE TABLE IF NOT EXISTS user_preferences (
+    username TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT,
+    PRIMARY KEY (username, key)
+  )`);
   run(`CREATE TABLE IF NOT EXISTS download_events (
     id TEXT PRIMARY KEY,
     url TEXT NOT NULL,
@@ -317,6 +325,31 @@ function setAppSetting(key, value) {
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, [key, value || "", now, now]);
 }
 
+function getUserPreference(username, key, fallback = "") {
+  if (!username) return fallback;
+  return get("SELECT value FROM user_preferences WHERE username = ? AND key = ?", [username, key])?.value || fallback;
+}
+
+function setUserPreference(username, key, value) {
+  if (!username) return;
+  const now = new Date().toISOString();
+  run(`INSERT INTO user_preferences (username, key, value, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(username, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, [
+    username,
+    key,
+    value || "",
+    now,
+    now
+  ]);
+}
+
+function userPreferences(username) {
+  return {
+    showShorts: getUserPreference(username, "show_shorts", "true") !== "false"
+  };
+}
+
 function appSettings() {
   return {
     metubeUrl: getAppSetting("metube_url"),
@@ -348,6 +381,7 @@ function upsertUser(user) {
 function deleteUser(username) {
   run("DELETE FROM users WHERE username = ?", [username]);
   run("DELETE FROM tv_tokens WHERE username = ?", [username]);
+  run("DELETE FROM user_preferences WHERE username = ?", [username]);
 }
 
 function setupRequired() {
@@ -969,6 +1003,7 @@ async function scanLibrary(options = {}) {
       height: probe.height,
       codec: probe.codec,
       resolutionLabel: probe.resolutionLabel,
+      isShort: Boolean(probe.width && probe.height && probe.height > probe.width),
       youtubeId: metadata.youtubeId,
       hasDescription: Boolean(metadata.description),
       size: stats.size,
@@ -1328,6 +1363,17 @@ async function handleApi(req, res, url) {
       qualityPresets: QUALITY_PRESETS,
       user: session
     });
+  }
+
+  if (url.pathname === "/api/preferences") {
+    const username = progressUsername(session);
+    if (req.method === "GET") return sendJson(res, 200, userPreferences(username));
+
+    if (req.method === "POST") {
+      const payload = await readBody(req);
+      setUserPreference(username, "show_shorts", payload.showShorts === false ? "false" : "true");
+      return sendJson(res, 200, userPreferences(username));
+    }
   }
 
   if (url.pathname === "/api/settings") {

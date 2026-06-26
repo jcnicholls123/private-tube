@@ -255,6 +255,22 @@ button {
   transform: translate(2px, 3px);
 }
 
+.menu-icon.shorts::before {
+  width: 11px;
+  height: 17px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+}
+
+.menu-icon.shorts::after {
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid currentColor;
+  transform: translate(1px, 0);
+}
+
 .menu-icon.subscriptions::before {
   width: 16px;
   height: 12px;
@@ -927,6 +943,49 @@ button {
   border-top: 8px solid transparent;
   border-bottom: 8px solid transparent;
   border-left: 13px solid #fff;
+}
+
+.quality-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  min-width: 46px;
+  min-height: 24px;
+  border-radius: 5px;
+  padding: 0 8px;
+  background: rgba(0, 0, 0, 0.82);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+:root[data-theme="light"] .quality-badge {
+  background: rgba(255, 255, 255, 0.94);
+  color: #111;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+}
+
+.continue-card .quality-badge {
+  bottom: 16px;
+}
+
+.shorts-grid {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+
+.shorts-grid .thumb,
+.short-card .thumb {
+  aspect-ratio: 9 / 16;
+  background: #050505;
+}
+
+.shorts-grid .thumb img,
+.short-card .thumb img {
+  object-fit: cover;
 }
 
 .video-copy {

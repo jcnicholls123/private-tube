@@ -174,8 +174,29 @@
     return '<span class="channel-avatar">' + channel.name.slice(0, 1).toUpperCase() + "</span>";
   }
 
+  function tvVideos() {
+    return state.library.videos.filter(function (video) {
+      return !video.isShort;
+    });
+  }
+
+  function tvChannels() {
+    var videos = tvVideos();
+    return state.library.channels.map(function (channel) {
+      var channelVideos = videos.filter(function (video) {
+        return video.channelId === channel.id;
+      });
+      return Object.assign({}, channel, {
+        count: channelVideos.length,
+        thumbnail: channel.thumbnail || (channelVideos.find(function (video) { return video.thumbnail; }) || {}).thumbnail || null
+      });
+    }).filter(function (channel) {
+      return channel.count > 0;
+    });
+  }
+
   function videosForView() {
-    var videos = state.library.videos.slice();
+    var videos = tvVideos();
     if (state.filter === "recent") videos = videos.slice(0, 30);
     if (state.filter === "channel") {
       videos = videos.filter(function (video) {
@@ -187,7 +208,7 @@
 
   function continueItems() {
     return state.progress.filter(function (item) {
-      return item.video && item.position > 5 && (!item.duration || item.position < item.duration - 8);
+      return item.video && !item.video.isShort && item.position > 5 && (!item.duration || item.position < item.duration - 8);
     }).slice(0, 8);
   }
 
@@ -331,9 +352,10 @@
 
     if (state.filter === "channels") {
       viewTitle.textContent = "Channels";
-      viewMeta.textContent = state.library.channels.length + " channel" + (state.library.channels.length === 1 ? "" : "s");
+      var channels = tvChannels();
+      viewMeta.textContent = channels.length + " channel" + (channels.length === 1 ? "" : "s");
       grid.className = "tv-grid channel-grid";
-      grid.innerHTML = state.library.channels.map(function (channel) {
+      grid.innerHTML = channels.map(function (channel) {
         return '<button class="focus-card channel-card" type="button" data-channel="' + channel.id + '" data-focus-id="channel-' + channel.id + '">' +
           '<span class="channel-thumb">' + channelThumb(channel) + "</span>" +
           "<strong>" + channel.name + "</strong>" +
@@ -353,7 +375,7 @@
     }
 
     var videos = videosForView();
-    var channel = state.library.channels.find(function (item) {
+    var channel = tvChannels().find(function (item) {
       return item.id === state.channelId;
     });
     var resumeItems = state.filter === "all" ? continueItems() : [];
@@ -431,17 +453,17 @@
   function nextAutoplayVideo() {
     if (state.autoplay === "off" || !state.currentVideo) return null;
     var queue = state.autoplay === "channel"
-      ? state.library.videos.filter(function (video) { return video.channelId === state.currentVideo.channelId; })
+      ? tvVideos().filter(function (video) { return video.channelId === state.currentVideo.channelId; })
       : videosForView();
     var index = queue.findIndex(function (video) { return video.id === state.currentVideo.id; });
     if (index >= 0 && index + 1 < queue.length) return queue[index + 1];
 
-    var sameChannel = state.library.videos.find(function (video) {
+    var sameChannel = tvVideos().find(function (video) {
       return video.id !== state.currentVideo.id && video.channelId === state.currentVideo.channelId;
     });
     if (sameChannel) return sameChannel;
 
-    return state.library.videos.find(function (video) {
+    return tvVideos().find(function (video) {
       return video.id !== state.currentVideo.id;
     }) || state.currentVideo;
   }
@@ -486,7 +508,7 @@
   }
 
   function openVideo(videoId, startAt) {
-    var video = state.library.videos.find(function (item) {
+    var video = tvVideos().find(function (item) {
       return item.id === videoId;
     });
     if (!video) return;
@@ -625,12 +647,18 @@
     showOffline("The TV network connection is offline.");
   });
 
-  tabs.querySelectorAll("button").forEach(function (button) {
+  tabs.querySelectorAll("[data-filter]").forEach(function (button) {
     button.addEventListener("click", function () {
       state.lastLibraryFocus = null;
       state.filter = button.dataset.filter;
       state.channelId = "";
       render();
+    });
+  });
+
+  tabs.querySelector("[data-action='refresh']").addEventListener("click", function () {
+    api("/api/rescan", { method: "POST" }).then(loadLibrary).catch(function (error) {
+      showOffline(error.message || "Refresh failed.");
     });
   });
 

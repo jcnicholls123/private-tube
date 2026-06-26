@@ -4,7 +4,7 @@ This folder contains the PrivateTube server, browser UI, TV UI, and TV wrapper a
 
 ## Version
 
-PrivateTube server version: `0.1.1`
+PrivateTube server version: `0.1.2`
 
 TV wrapper versions:
 

@@ -7,6 +7,7 @@ const state = {
   downloads: [],
   progress: [],
   settings: { metubeUrl: "", publicUrl: "" },
+  preferences: { showShorts: true },
   filter: "all",
   query: "",
   channelId: ""
@@ -200,8 +201,8 @@ function formatRelative(value) {
 }
 
 function thumbnail(video) {
-  if (video.thumbnail) return `<img src="${video.thumbnail}" alt="">`;
-  return `<div class="thumb-fallback"><span></span></div>`;
+  const media = video.thumbnail ? `<img src="${video.thumbnail}" alt="">` : `<div class="thumb-fallback"><span></span></div>`;
+  return `${media}<span class="quality-badge">${videoQualityLabel(video)}</span>`;
 }
 
 function qualityPreset(id) {
@@ -214,6 +215,20 @@ function qualityLabel(id) {
 
 function qualityDescription(id) {
   return qualityPreset(id)?.description || "";
+}
+
+function videoQualityLabel(video) {
+  if (video?.resolutionLabel) return video.resolutionLabel;
+  if (video?.height) return video.height >= 2000 ? "4K" : `${video.height}p`;
+  const text = [video?.title, video?.path, video?.contentType].join(" ").toLowerCase();
+  if (text.includes("webm")) return "WEBM";
+  if (text.includes("mp4") || text.includes("m4v")) return "MP4";
+  if (text.includes("mkv")) return "MKV";
+  return "VIDEO";
+}
+
+function visibleVideo(video) {
+  return state.preferences.showShorts || !video.isShort || state.filter === "shorts";
 }
 
 function renderQualityInfo() {
@@ -244,7 +259,7 @@ function selectFilter(filter, channelId = "") {
 }
 
 function channelDisplay(channel) {
-  const videos = state.library.videos.filter((video) => video.channelId === channel.id);
+  const videos = state.library.videos.filter((video) => visibleVideo(video) && video.channelId === channel.id);
   const namedVideo = videos.find((video) => video.channel && video.channel !== "Uploads");
   const name = channel.name === "Uploads" && namedVideo ? namedVideo.channel : channel.name;
   const thumbnail = channel.thumbnail || videos.find((video) => video.thumbnail)?.thumbnail || null;
@@ -254,7 +269,7 @@ function channelDisplay(channel) {
 
 function visibleChannels() {
   const byId = new Map();
-  for (const channel of state.library.channels.map(channelDisplay)) {
+  for (const channel of state.library.channels.map(channelDisplay).filter((channel) => channel.count > 0 || channel.subscribed)) {
     const key = channel.name === "Uploads" ? "uploads" : channel.id;
     const existing = byId.get(key);
     if (!existing) {
@@ -270,7 +285,7 @@ function visibleChannels() {
 }
 
 function renderChannels() {
-  channelStrip.hidden = state.filter === "channels" || state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
+  channelStrip.hidden = state.filter === "channels" || state.filter === "shorts" || state.filter === "subscriptions" || state.filter === "users" || state.filter === "settings";
   if (channelStrip.hidden) {
     channelStrip.innerHTML = "";
     return;
@@ -291,13 +306,14 @@ function renderChannels() {
 }
 
 function filteredVideos() {
-  let videos = [...state.library.videos];
+  let videos = state.library.videos.filter(visibleVideo);
 
   if (state.filter === "channel" && state.channelId) {
     videos = videos.filter((video) => video.channelId === state.channelId);
   }
 
   if (state.filter === "recent") videos = videos.slice(0, 24);
+  if (state.filter === "shorts") videos = state.library.videos.filter((video) => video.isShort);
 
   if (state.query.trim()) {
     const query = state.query.toLowerCase();
@@ -323,8 +339,9 @@ function renderVideos(videos) {
   }
 
   grid.classList.remove("channel-grid");
+  grid.classList.toggle("shorts-grid", state.filter === "shorts");
   grid.innerHTML = videos.map((video) => `
-    <article class="video-card">
+    <article class="video-card ${video.isShort ? "short-card" : ""}">
       <a class="thumb" href="${video.watchUrl}">${thumbnail(video)}</a>
       <div class="video-copy">
         <a class="video-title" href="${video.watchUrl}">${video.title}</a>
@@ -346,6 +363,7 @@ function channelThumb(channel) {
 
 function renderChannelDirectory() {
   grid.hidden = false;
+  grid.classList.remove("shorts-grid");
   grid.classList.add("channel-grid");
   grid.innerHTML = visibleChannels().map((channel) => `
     <article class="channel-card">
@@ -366,7 +384,7 @@ function renderChannelDirectory() {
 }
 
 function renderContinue() {
-  const items = state.progress.filter((item) => item.video && item.position > 5);
+  const items = state.progress.filter((item) => item.video && visibleVideo(item.video) && item.position > 5);
   continueSection.hidden = items.length === 0 || state.filter !== "all" || Boolean(state.query);
   if (continueSection.hidden) {
     continueGrid.innerHTML = "";
@@ -423,6 +441,10 @@ function renderTitle(videos) {
     const channel = visibleChannels().find((item) => item.id === state.channelId);
     viewTitle.textContent = channel ? channel.name : "Channel";
     viewMeta.textContent = `${videos.length} video${videos.length === 1 ? "" : "s"}`;
+  } else if (state.filter === "shorts") {
+    const count = state.library.videos.filter((video) => video.isShort).length;
+    viewTitle.textContent = "Shorts";
+    viewMeta.textContent = `${count} vertical video${count === 1 ? "" : "s"}`;
   } else if (state.filter === "channels") {
     viewTitle.textContent = "Channels";
     const channels = visibleChannels();
@@ -582,6 +604,14 @@ function renderSettings() {
         <p>${notificationStatusText()}</p>
         <button id="notificationButton" class="secondary-button" type="button" ${canUseBrowserNotifications() ? "" : "disabled"}>${canUseBrowserNotifications() ? "Enable browser notifications" : "Browser notifications unavailable"}</button>
       </section>
+      <section class="settings-card">
+        <h2>Shorts</h2>
+        <p>Show portrait videos in Home and Latest for this user/profile.</p>
+        <div class="segmented">
+          <button type="button" data-shorts-choice="true">Show</button>
+          <button type="button" data-shorts-choice="false">Hide</button>
+        </div>
+      </section>
     </div>
     <form id="settingsForm" class="settings-form settings-form-wide cast-settings-form">
       <label>
@@ -631,6 +661,17 @@ function renderSettings() {
   });
 
   document.querySelector("#notificationButton").addEventListener("click", enableNotifications);
+  document.querySelectorAll("[data-shorts-choice]").forEach((button) => {
+    button.classList.toggle("active", String(state.preferences.showShorts) === button.dataset.shortsChoice);
+    button.addEventListener("click", async () => {
+      state.preferences = await api("/api/preferences", {
+        method: "POST",
+        body: JSON.stringify({ showShorts: button.dataset.shortsChoice === "true" })
+      });
+      notify(state.preferences.showShorts ? "Shorts enabled" : "Shorts hidden", "success");
+      render();
+    });
+  });
   document.querySelector("#brandNameButton").addEventListener("click", () => {
     applyBrandName(document.querySelector("#brandNameInput").value);
     notify("Name saved", "success");
@@ -713,14 +754,16 @@ async function loadProgress() {
 async function loadLibrary() {
   state.config = await api("/api/config");
   renderQualityOptions();
-  const [library, downloads, progress] = await Promise.all([
+  const [library, downloads, progress, preferences] = await Promise.all([
     api("/api/library"),
     api("/api/downloads"),
-    api("/api/progress")
+    api("/api/progress"),
+    api("/api/preferences")
   ]);
   state.library = library;
   state.downloads = downloads.downloads || [];
   state.progress = progress.progress || [];
+  state.preferences = preferences;
   await loadAdminData();
   renderAddPanel();
   render();
