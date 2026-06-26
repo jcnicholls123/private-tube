@@ -1,25 +1,25 @@
 (function () {
-  const storageKey = "privatetube-url";
-  const input = document.querySelector("#serverUrl");
-  const openButton = document.querySelector("#openButton");
-  const saveButton = document.querySelector("#saveButton");
-  const clearButton = document.querySelector("#clearButton");
-  const status = document.querySelector("#status");
+  var storageKey = "privatetube-url";
+  var input = document.querySelector("#serverUrl");
+  var openButton = document.querySelector("#openButton");
+  var saveButton = document.querySelector("#saveButton");
+  var clearButton = document.querySelector("#clearButton");
+  var status = document.querySelector("#status");
 
   function normalizeUrl(value) {
-    const trimmed = String(value || "").trim();
+    var trimmed = String(value || "").trim();
     if (!trimmed) return "";
     try {
-      const url = new URL(trimmed);
-      const pathname = url.pathname.replace(/\/$/, "");
+      var url = new URL(trimmed);
+      var pathname = url.pathname.replace(/\/$/, "");
       return url.origin + (pathname && pathname !== "/tv.html" ? pathname : "");
-    } catch {
+    } catch (error) {
       return "";
     }
   }
 
   function tvUrl(baseUrl) {
-    return `${baseUrl.replace(/\/$/, "")}/tv.html`;
+    return baseUrl.replace(/\/$/, "") + "/tv.html";
   }
 
   function setStatus(message) {
@@ -46,10 +46,10 @@
   }
 
   function moveFocus(direction) {
-    const focusables = [...document.querySelectorAll("input, button")];
-    const index = focusables.indexOf(document.activeElement);
-    const next = focusables[Math.max(0, Math.min(focusables.length - 1, index + direction))];
-    next?.focus();
+    var focusables = Array.prototype.slice.call(document.querySelectorAll("input, button"));
+    var index = focusables.indexOf(document.activeElement);
+    var next = focusables[Math.max(0, Math.min(focusables.length - 1, index + direction))];
+    if (next) next.focus();
   }
 
   input.value = localStorage.getItem(storageKey) || "";
@@ -57,14 +57,14 @@
 
   openButton.addEventListener("click", openPrivateTube);
   saveButton.addEventListener("click", saveUrl);
-  clearButton.addEventListener("click", () => {
+  clearButton.addEventListener("click", function () {
     localStorage.removeItem(storageKey);
     input.value = "";
     input.focus();
     setStatus("Cleared.");
   });
 
-  document.addEventListener("keydown", (event) => {
+  document.addEventListener("keydown", function (event) {
     if (event.key === "Enter" && document.activeElement !== input) {
       document.activeElement.click();
     }
