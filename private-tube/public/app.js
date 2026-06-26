@@ -10,6 +10,7 @@ const state = {
   preferences: { showShorts: true },
   shortsOrderKey: "",
   shortsOrder: [],
+  shortsMuted: localStorage.getItem("pt-shorts-muted") !== "off",
   filter: "all",
   query: "",
   channelId: ""
@@ -248,6 +249,21 @@ function reshuffleShorts() {
   state.shortsOrder = [...state.shortsOrder].sort(() => Math.random() - 0.5);
 }
 
+function setShortsMuted(muted, players = []) {
+  state.shortsMuted = muted;
+  localStorage.setItem("pt-shorts-muted", muted ? "on" : "off");
+  players.forEach((player) => {
+    player.muted = muted;
+  });
+  document.querySelectorAll("[data-shorts-mute]").forEach((button) => {
+    button.classList.toggle("active", !muted);
+    button.setAttribute("aria-label", muted ? "Turn sound on" : "Mute short");
+  });
+  document.querySelectorAll("[data-shorts-sound-prompt]").forEach((prompt) => {
+    prompt.hidden = !muted;
+  });
+}
+
 function renderQualityInfo() {
   if (!qualityInfo) return;
   qualityInfo.textContent = qualityDescription(qualitySelect.value);
@@ -383,7 +399,7 @@ function renderShortsFeed(videos) {
   grid.classList.add("shorts-feed");
   grid.innerHTML = videos.map((video, index) => `
     <article class="shorts-reel" data-short-index="${index}">
-      <video class="shorts-player" data-src="${video.url}" poster="${video.thumbnail || ""}" playsinline loop muted preload="none"></video>
+      <video class="shorts-player" data-src="${video.url}" poster="${video.thumbnail || ""}" playsinline loop preload="none"></video>
       <div class="shorts-scrim"></div>
       <button class="shorts-exit" type="button" data-shorts-home aria-label="Back to home"><span class="shorts-action-icon back"></span></button>
       <div class="shorts-copy">
@@ -391,9 +407,10 @@ function renderShortsFeed(videos) {
         <h2>${escapeHtml(video.title)}</h2>
         <p>${videoMeta(video)}</p>
       </div>
+      <button class="shorts-sound-prompt" type="button" data-shorts-sound-prompt data-shorts-mute="${index}">Tap for sound</button>
       <div class="shorts-actions">
         <button type="button" data-shorts-toggle="${index}" aria-label="Play or pause short"><span class="shorts-action-icon play"></span></button>
-        <button type="button" data-shorts-mute="${index}" aria-label="Mute or unmute short"><span class="shorts-action-icon mute"></span></button>
+        <button type="button" data-shorts-mute="${index}" aria-label="Turn sound on"><span class="shorts-action-icon mute"></span></button>
         <a href="${video.watchUrl}" aria-label="Open full watch page"><span class="shorts-action-icon open"></span></a>
         <button type="button" data-shorts-shuffle aria-label="Shuffle shorts"><span class="shorts-action-icon shuffle"></span></button>
       </div>
@@ -401,6 +418,7 @@ function renderShortsFeed(videos) {
   `).join("");
 
   const players = [...grid.querySelectorAll(".shorts-player")];
+  setShortsMuted(state.shortsMuted, players);
   const activate = (player) => {
     if (!player) return;
     if (!player.src) player.src = player.dataset.src;
@@ -441,8 +459,19 @@ function renderShortsFeed(videos) {
     button.addEventListener("click", () => {
       const player = players[Number(button.dataset.shortsMute)];
       if (!player) return;
-      player.muted = !player.muted;
-      button.classList.toggle("active", !player.muted);
+      setShortsMuted(!state.shortsMuted, players);
+      if (!state.shortsMuted) player.play().catch(() => {});
+    });
+  });
+  players.forEach((player, index) => {
+    player.addEventListener("click", () => {
+      if (state.shortsMuted) {
+        setShortsMuted(false, players);
+        player.play().catch(() => {});
+        return;
+      }
+      if (player.paused) player.play().catch(() => {});
+      else player.pause();
     });
   });
   grid.querySelectorAll("[data-shorts-shuffle]").forEach((button) => {
