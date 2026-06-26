@@ -4,6 +4,7 @@
     channelId: "",
     library: { videos: [], channels: [] },
     progress: [],
+    watchedVideoIds: [],
     profiles: [],
     selectedProfile: localStorage.getItem("pt-tv-profile") || "",
     brandName: "PrivateTube",
@@ -46,6 +47,8 @@
   var upNextThumb = document.querySelector("#upNextThumb");
   var playNextButton = document.querySelector("#playNextButton");
   var cancelNextButton = document.querySelector("#cancelNextButton");
+  var previousVideoButton = document.querySelector("#previousVideoButton");
+  var nextVideoButton = document.querySelector("#nextVideoButton");
   var currentTime = document.querySelector("#currentTime");
   var durationTime = document.querySelector("#durationTime");
   var progressFill = document.querySelector("#progressFill");
@@ -272,10 +275,12 @@
 
   function renderProfiles() {
     profileGrid.innerHTML = state.profiles.map(function (profile) {
-      var initial = profile.username.slice(0, 1).toUpperCase();
-      return '<button class="profile-card focus-card" type="button" data-profile="' + profile.username + '" data-focus-id="profile-' + profile.username + '">' +
+      var profileKey = profile.key || profile.username;
+      var profileName = profile.name || profile.username;
+      var initial = profileName.slice(0, 1).toUpperCase();
+      return '<button class="profile-card focus-card" type="button" data-profile="' + escapeHtml(profileKey) + '" data-focus-id="profile-' + escapeHtml(profileKey) + '">' +
         '<span class="profile-avatar">' + initial + '</span>' +
-        '<strong>' + profile.username + '</strong>' +
+        '<strong>' + escapeHtml(profileName) + '</strong>' +
       "</button>";
     }).join("");
 
@@ -379,6 +384,7 @@
       return item.id === state.channelId;
     });
     var resumeItems = state.filter === "all" ? continueItems() : [];
+    var watched = new Set(state.watchedVideoIds || []);
     viewTitle.textContent = state.filter === "channel" ? (channel && channel.name ? channel.name : "Channel") : state.filter === "recent" ? "Latest" : "Home";
     viewMeta.textContent = videos.length + " video" + (videos.length === 1 ? "" : "s");
     grid.className = "tv-grid";
@@ -393,8 +399,8 @@
         "</button>";
       }).join("") + '</div>' +
     '</section>' : "") + videos.map(function (video) {
-      return '<button class="focus-card video-card" type="button" data-video="' + video.id + '" data-focus-id="video-' + video.id + '">' +
-        '<span class="thumb">' + thumbnail(video) + "</span>" +
+      return '<button class="focus-card video-card' + (watched.has(video.id) ? " watched" : "") + '" type="button" data-video="' + video.id + '" data-focus-id="video-' + video.id + '">' +
+        '<span class="thumb">' + thumbnail(video) + (watched.has(video.id) ? '<span class="watched-tick" aria-label="Watched"></span>' : "") + "</span>" +
         "<strong>" + video.title + "</strong>" +
         "<span>" + video.channel + "</span>" +
       "</button>";
@@ -468,6 +474,33 @@
     }) || state.currentVideo;
   }
 
+  function playerQueue() {
+    if (!state.currentVideo) return [];
+    var queue = state.filter === "channel"
+      ? tvVideos().filter(function (video) { return video.channelId === state.currentVideo.channelId; })
+      : videosForView();
+    if (!queue.some(function (video) { return video.id === state.currentVideo.id; })) {
+      queue = tvVideos();
+    }
+    return queue;
+  }
+
+  function adjacentVideo(direction) {
+    var queue = playerQueue();
+    var index = queue.findIndex(function (video) { return state.currentVideo && video.id === state.currentVideo.id; });
+    if (index < 0) return null;
+    var nextIndex = direction === "previous" ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= queue.length) return null;
+    return queue[nextIndex];
+  }
+
+  function updateAdjacentButtons() {
+    var previous = adjacentVideo("previous");
+    var next = adjacentVideo("next") || nextAutoplayVideo();
+    previousVideoButton.disabled = !previous;
+    nextVideoButton.disabled = !next || next.id === state.currentVideo.id;
+  }
+
   function renderUpNext() {
     if (!state.nextVideo) return;
     upNextCount.textContent = String(state.autoplayCountdown);
@@ -482,6 +515,34 @@
     var next = state.nextVideo;
     clearAutoplayCountdown();
     openVideo(next.id);
+  }
+
+  function markCurrentWatched() {
+    if (!state.currentVideo || !player.duration) return Promise.resolve();
+    state.watchedVideoIds = Array.from(new Set([].concat(state.watchedVideoIds || [], [state.currentVideo.id])));
+    return fetch("/api/progress", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        videoId: state.currentVideo.id,
+        position: Math.max(0, player.duration - 1),
+        duration: player.duration
+      }),
+      keepalive: true
+    }).catch(function () {});
+  }
+
+  function playAdjacent(direction, markWatched) {
+    var target = adjacentVideo(direction);
+    if (!target && direction === "next") target = nextAutoplayVideo();
+    if (!target || target.id === state.currentVideo.id) return;
+    clearAutoplayCountdown();
+    var beforeOpen = markWatched ? markCurrentWatched() : saveProgress(true);
+    beforeOpen.then(function () {
+      return loadProgress();
+    }).then(function () {
+      openVideo(target.id);
+    });
   }
 
   function cancelAutoplay() {
@@ -524,6 +585,7 @@
     player.focus();
     player.play().catch(function () {});
     updatePlayerControls();
+    updateAdjacentButtons();
     showPlayerOverlay();
   }
 
@@ -560,8 +622,10 @@
   function loadProgress() {
     return api("/api/progress").then(function (result) {
       state.progress = result.progress || [];
+      state.watchedVideoIds = result.watchedVideoIds || [];
     }).catch(function () {
       state.progress = [];
+      state.watchedVideoIds = [];
     });
   }
 
@@ -570,7 +634,7 @@
       state.profiles = result.profiles || [];
       state.selectedProfile = localStorage.getItem("pt-tv-profile") || result.selectedProfile || "";
       renderProfiles();
-      if (state.selectedProfile && state.profiles.some(function (profile) { return profile.username === state.selectedProfile; })) {
+      if (state.selectedProfile && state.profiles.some(function (profile) { return (profile.key || profile.username) === state.selectedProfile; })) {
         return selectProfile(state.selectedProfile, true);
       }
       show(profilePanel);
@@ -578,13 +642,13 @@
     });
   }
 
-  function selectProfile(username, quiet) {
+  function selectProfile(profileKey, quiet) {
     return api("/api/tv/profile", {
       method: "POST",
-      body: JSON.stringify({ username: username })
+      body: JSON.stringify({ profileKey: profileKey })
     }).then(function () {
-      state.selectedProfile = username;
-      localStorage.setItem("pt-tv-profile", username);
+      state.selectedProfile = profileKey;
+      localStorage.setItem("pt-tv-profile", profileKey);
       loadBrandName();
       return loadLibrary();
     }).catch(function (error) {
@@ -680,6 +744,7 @@
   });
   player.addEventListener("ended", function () {
     updatePlayerControls();
+    if (state.currentVideo) state.watchedVideoIds = Array.from(new Set([].concat(state.watchedVideoIds || [], [state.currentVideo.id])));
     saveProgress(true);
     var next = nextAutoplayVideo();
     if (next) showUpNext(next);
@@ -691,6 +756,12 @@
   player.addEventListener("click", showPlayerOverlay);
   playNextButton.addEventListener("click", playNextVideo);
   cancelNextButton.addEventListener("click", cancelAutoplay);
+  previousVideoButton.addEventListener("click", function () {
+    playAdjacent("previous", false);
+  });
+  nextVideoButton.addEventListener("click", function () {
+    playAdjacent("next", true);
+  });
   loadBrandName();
 
   document.addEventListener("focusin", function (event) {
@@ -731,6 +802,11 @@
         }
       }
       if (isOk) {
+        if (document.activeElement && document.activeElement !== player && document.activeElement.click) {
+          document.activeElement.click();
+          event.preventDefault();
+          return;
+        }
         togglePlayback();
         event.preventDefault();
         return;
@@ -747,6 +823,7 @@
       }
       if (key === "ArrowDown" || key === "ArrowUp") {
         showPlayerOverlay();
+        moveFocus(arrows[key]);
         event.preventDefault();
         return;
       }

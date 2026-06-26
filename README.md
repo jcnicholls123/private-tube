@@ -4,7 +4,7 @@ PrivateTube is a self-hosted YouTube-style library for videos downloaded by MeTu
 
 ## Versions
 
-- PrivateTube server: `0.1.5`
+- PrivateTube server: `0.1.6`
 - Docker image: `ghcr.io/jcnicholls123/private-tube:latest`
 - Docker alias: `ghcr.io/jcnicholls123/private-tube:truenas`
 - LG webOS app: `0.1.1`

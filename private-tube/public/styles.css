@@ -303,6 +303,22 @@ button {
   border-radius: 999px 999px 3px 3px;
 }
 
+.menu-icon.profile::before {
+  width: 9px;
+  height: 9px;
+  top: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.menu-icon.profile::after {
+  width: 17px;
+  height: 8px;
+  bottom: 6px;
+  border-radius: 999px 999px 3px 3px;
+  background: currentColor;
+}
+
 .menu-icon.settings::before {
   width: 15px;
   height: 15px;
@@ -1004,19 +1020,22 @@ body.shorts-mode .download-status {
 
 body.shorts-mode .shell {
   display: block;
-  height: 100svh;
+  height: 100dvh;
+  min-height: 100svh;
   padding: 0;
 }
 
 body.shorts-mode .content {
-  height: 100svh;
+  height: 100dvh;
+  min-height: 100svh;
 }
 
 .shorts-feed {
   display: block;
-  height: 100svh;
+  height: 100dvh;
+  min-height: 100svh;
   overflow-y: auto;
-  scroll-snap-type: y proximity;
+  scroll-snap-type: y mandatory;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
@@ -1032,9 +1051,10 @@ body.shorts-mode .content {
   position: relative;
   display: grid;
   place-items: center;
-  height: 100svh;
-  min-height: 540px;
+  height: 100dvh;
+  min-height: 100svh;
   scroll-snap-align: start;
+  scroll-snap-stop: always;
   overflow: hidden;
   contain: layout paint size;
   content-visibility: auto;
@@ -1045,8 +1065,9 @@ body.shorts-mode .content {
 
 .shorts-player {
   width: min(100vw, 520px);
-  height: 100svh;
-  max-height: 100svh;
+  height: 100dvh;
+  min-height: 100svh;
+  max-height: 100dvh;
   background: #000;
   object-fit: cover;
   transform: translateZ(0);
@@ -1353,6 +1374,76 @@ body.shorts-mode .content {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.profile-settings-card {
+  grid-column: 1 / -1;
+}
+
+.profile-choice-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+}
+
+.profile-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.profile-choice button {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.profile-choice > button:first-child {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 0 12px;
+  text-align: left;
+}
+
+.profile-choice > button:first-child span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-choice.active > button:first-child {
+  border-color: color-mix(in srgb, var(--accent) 70%, #fff);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+}
+
+.profile-avatar-mini {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.profile-delete {
+  padding: 0 12px;
+}
+
+.compact-form {
+  grid-template-columns: minmax(180px, 1fr) auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .segmented {

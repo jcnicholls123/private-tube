@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PrivateTube TV</title>
-    <link rel="stylesheet" href="/tv.css?v=20260626-tv-refresh">
+    <link rel="stylesheet" href="/tv.css?v=20260626-profiles-cleanup-tv-next">
   </head>
   <body>
     <main id="app" class="tv-shell">
@@ -66,6 +66,10 @@
             <p id="playerMeta"></p>
           </div>
           <div id="playerQuality" class="quality-chip">WEBM</div>
+          <div class="player-transport">
+            <button id="previousVideoButton" class="focus-card transport-button" type="button" aria-label="Previous video"><span class="transport-icon previous"></span><span>Previous</span></button>
+            <button id="nextVideoButton" class="focus-card transport-button" type="button" aria-label="Next video"><span class="transport-icon next"></span><span>Next</span></button>
+          </div>
           <div class="player-progress">
             <span id="currentTime">0:00</span>
             <div class="progress-track"><span id="progressFill"></span></div>
@@ -74,6 +78,7 @@
           <div class="player-hints">
             <span>OK Play/Pause</span>
             <span>Left/Right Seek</span>
+            <span>Next marks watched</span>
             <span>Back Library</span>
           </div>
         </div>
@@ -96,6 +101,6 @@
         </div>
       </section>
     </main>
-    <script src="/tv.js?v=20260626-tv-refresh"></script>
+    <script src="/tv.js?v=20260626-profiles-cleanup-tv-next"></script>
   </body>
 </html>

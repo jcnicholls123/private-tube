@@ -420,6 +420,43 @@ p {
   background: var(--accent);
 }
 
+.watched-tick {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(10, 170, 92, 0.94);
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+}
+
+.watched-tick::before {
+  content: "";
+  width: 14px;
+  height: 8px;
+  border-left: 4px solid currentColor;
+  border-bottom: 4px solid currentColor;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.video-card.watched strong::after {
+  content: "Watched";
+  display: inline-grid;
+  place-items: center;
+  min-height: 24px;
+  margin-left: 10px;
+  border-radius: 999px;
+  background: rgba(10, 170, 92, 0.18);
+  color: #70e3aa;
+  padding: 0 10px;
+  font-size: 15px;
+  vertical-align: middle;
+}
+
 .profile-panel {
   display: grid;
   gap: 34px;
@@ -832,6 +869,87 @@ video {
   align-self: center;
   min-height: 38px;
   background: rgba(255, 255, 255, 0.18);
+}
+
+.player-transport {
+  grid-column: 2 / 4;
+  display: flex;
+  gap: 12px;
+  align-self: center;
+  justify-content: flex-end;
+  pointer-events: auto;
+}
+
+.transport-button {
+  display: grid;
+  grid-template-columns: 34px auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 154px;
+  min-height: 56px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  padding: 0 20px 0 14px;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.transport-button:focus,
+.transport-button:hover {
+  background: #fff;
+  color: #111;
+}
+
+.transport-button:disabled {
+  opacity: 0.42;
+}
+
+.transport-icon {
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 34px;
+}
+
+.transport-icon::before,
+.transport-icon::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  box-sizing: border-box;
+}
+
+.transport-icon::before {
+  width: 0;
+  height: 0;
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+}
+
+.transport-icon::after {
+  width: 4px;
+  height: 20px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.transport-icon.previous::before {
+  left: 8px;
+  border-right: 15px solid currentColor;
+}
+
+.transport-icon.previous::after {
+  left: 6px;
+}
+
+.transport-icon.next::before {
+  right: 8px;
+  border-left: 15px solid currentColor;
+}
+
+.transport-icon.next::after {
+  right: 6px;
 }
 
 .progress-track {

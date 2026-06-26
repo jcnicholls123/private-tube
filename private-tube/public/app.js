@@ -4,8 +4,11 @@ const state = {
   config: { metubeEnabled: false, qualityPresets: [] },
   subscriptions: [],
   users: [],
+  profiles: [],
+  selectedProfile: "",
   downloads: [],
   progress: [],
+  watchedVideoIds: [],
   settings: { metubeUrl: "", publicUrl: "" },
   preferences: { showShorts: true },
   shortsOrderKey: "",
@@ -30,6 +33,7 @@ const qualityInfo = document.querySelector("#qualityInfo");
 const addStatus = document.querySelector("#addStatus");
 const adminPanel = document.querySelector("#adminPanel");
 const logoutButton = document.querySelector("#logoutButton");
+const profileButton = document.querySelector("#profileButton");
 const menuButton = document.querySelector("#menuButton");
 const menuCloseButton = document.querySelector("#menuCloseButton");
 const appMenu = document.querySelector("#appMenu");
@@ -50,6 +54,14 @@ searchInput.value = state.query;
 
 function isAdmin() {
   return state.session.user?.role === "admin";
+}
+
+function currentProfile() {
+  return state.profiles.find((profile) => profile.key === state.selectedProfile) || state.profiles[0] || null;
+}
+
+function profileDisplayName(profile = currentProfile()) {
+  return profile?.name || profile?.username || "Profile";
 }
 
 function applyTheme(theme = localStorage.getItem("pt-theme") || "dark") {
@@ -442,14 +454,27 @@ function renderShortsFeed(videos) {
     const index = Math.max(0, Math.min(players.length - 1, Math.round(grid.scrollTop / height)));
     activate(players[index], index);
   };
+  const snapNearest = () => {
+    const height = Math.max(1, grid.clientHeight);
+    const index = Math.max(0, Math.min(players.length - 1, Math.round(grid.scrollTop / height)));
+    const target = index * height;
+    if (Math.abs(grid.scrollTop - target) > 2) {
+      grid.scrollTo({ top: target, behavior: "smooth" });
+    }
+    activate(players[index], index);
+  };
   let scrollFrame = 0;
+  let snapTimer = 0;
   grid.addEventListener("scroll", () => {
+    window.clearTimeout(snapTimer);
+    snapTimer = window.setTimeout(snapNearest, 120);
     if (scrollFrame) return;
     scrollFrame = requestAnimationFrame(() => {
       scrollFrame = 0;
       activateNearest();
     });
   }, { passive: true });
+  grid.addEventListener("scrollend", snapNearest);
   preloadAround(0);
   activate(players[0], 0);
 
@@ -721,6 +746,25 @@ function renderSettings() {
 
   adminPanel.innerHTML = `
     <div class="settings-grid">
+      <section class="settings-card profile-settings-card">
+        <h2>Profiles</h2>
+        <p>Watching as ${escapeHtml(profileDisplayName())}.</p>
+        <div class="profile-choice-list">
+          ${state.profiles.map((profile) => `
+            <div class="profile-choice ${profile.key === state.selectedProfile ? "active" : ""}">
+              <button type="button" data-profile-select="${escapeHtml(profile.key)}">
+                <span class="profile-avatar-mini">${escapeHtml((profile.name || profile.username || "?").slice(0, 1).toUpperCase())}</span>
+                <span>${escapeHtml(profile.name || profile.username)}</span>
+              </button>
+              ${profile.type === "child" ? `<button class="profile-delete" type="button" data-profile-delete="${escapeHtml(profile.id)}" aria-label="Delete ${escapeHtml(profile.name)}">Delete</button>` : ""}
+            </div>
+          `).join("")}
+        </div>
+        <form id="childProfileForm" class="settings-form compact-form">
+          <input name="name" maxlength="36" placeholder="Child profile name" required>
+          <button type="submit">Add child profile</button>
+        </form>
+      </section>
       <section class="settings-card">
         <h2>Appearance</h2>
         <p>Choose how PrivateTube looks on this browser.</p>
@@ -752,7 +796,7 @@ function renderSettings() {
         </div>
       </section>
     </div>
-    <form id="settingsForm" class="settings-form settings-form-wide cast-settings-form">
+    ${isAdmin() ? `<form id="settingsForm" class="settings-form settings-form-wide cast-settings-form">
       <label>
         <span>MeTube URL</span>
         <input name="metubeUrl" type="url" placeholder="http://10.69.24.3:30094" value="${state.settings.metubeUrl || ""}">
@@ -762,23 +806,23 @@ function renderSettings() {
         <input name="publicUrl" type="url" placeholder="${location.origin}" value="${state.settings.publicUrl || ""}">
       </label>
       <button type="submit">Save settings</button>
-    </form>
+    </form>` : ""}
     <div class="settings-list">
-      <article class="settings-row">
+      ${isAdmin() ? `<article class="settings-row">
         <div>
           <strong>Cast settings</strong>
           <p>Detected app URL: ${location.origin}</p>
           <p>Chromecast URL in use: ${state.settings.publicUrl || location.origin}</p>
           <p>Use your TrueNAS LAN URL here, not localhost or 127.0.0.1. Example: http://10.69.24.3:3020</p>
         </div>
-      </article>
+      </article>` : ""}
       <article class="settings-row">
         <div>
           <strong>Descriptions</strong>
           <p>PrivateTube reads .info.json and .description files beside videos. Enable metadata sidecars in MeTube/yt-dlp for full YouTube descriptions.</p>
         </div>
       </article>
-      <article class="settings-row">
+      ${isAdmin() ? `<article class="settings-row">
         <div>
           <strong>Thumbnails</strong>
           <p>Generated previews are stored under /data/thumbnails. Existing sidecar images are preferred.</p>
@@ -787,6 +831,15 @@ function renderSettings() {
           <button id="regenerateThumbsButton" type="button">Regenerate</button>
         </div>
       </article>
+      <article class="settings-row">
+        <div>
+          <strong>Clean deleted videos</strong>
+          <p>Remove watch progress and generated cache files for videos no longer in the media folder.</p>
+        </div>
+        <div class="row-actions">
+          <button id="cleanDeletedButton" type="button">Clean DB</button>
+        </div>
+      </article>` : ""}
     </div>
   `;
 
@@ -800,6 +853,36 @@ function renderSettings() {
   });
 
   document.querySelector("#notificationButton").addEventListener("click", enableNotifications);
+  adminPanel.querySelectorAll("[data-profile-select]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const result = await api("/api/profile", {
+        method: "POST",
+        body: JSON.stringify({ profileKey: button.dataset.profileSelect })
+      });
+      state.selectedProfile = result.selectedProfile;
+      state.session.user = result.user;
+      notify(`Switched to ${profileDisplayName(state.profiles.find((profile) => profile.key === result.selectedProfile))}`, "success");
+      await loadLibrary();
+    });
+  });
+  adminPanel.querySelectorAll("[data-profile-delete]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const result = await api(`/api/profiles/${encodeURIComponent(button.dataset.profileDelete)}`, { method: "DELETE" });
+      state.profiles = result.profiles || [];
+      state.selectedProfile = result.selectedProfile || state.profiles[0]?.key || "";
+      notify("Child profile deleted", "success");
+      await loadLibrary();
+    });
+  });
+  document.querySelector("#childProfileForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    const result = await api("/api/profiles", { method: "POST", body: JSON.stringify(data) });
+    state.profiles = result.profiles || [];
+    state.selectedProfile = result.selectedProfile || state.selectedProfile;
+    notify("Child profile added", "success");
+    render();
+  });
   document.querySelectorAll("[data-shorts-choice]").forEach((button) => {
     button.classList.toggle("active", String(state.preferences.showShorts) === button.dataset.shortsChoice);
     button.addEventListener("click", async () => {
@@ -817,7 +900,7 @@ function renderSettings() {
     render();
   });
 
-  document.querySelector("#settingsForm").addEventListener("submit", async (event) => {
+  document.querySelector("#settingsForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.currentTarget));
     state.settings = await api("/api/settings", { method: "POST", body: JSON.stringify(data) });
@@ -827,9 +910,14 @@ function renderSettings() {
     render();
   });
 
-  document.querySelector("#regenerateThumbsButton").addEventListener("click", async () => {
+  document.querySelector("#regenerateThumbsButton")?.addEventListener("click", async () => {
     await api("/api/thumbnails/regenerate", { method: "POST", timeoutMs: 120000 });
     notify("Thumbnail regeneration started", "success");
+    await loadLibrary();
+  });
+  document.querySelector("#cleanDeletedButton")?.addEventListener("click", async () => {
+    const result = await api("/api/cleanup/deleted", { method: "POST", timeoutMs: 120000 });
+    notify(`Cleaned ${(result.deletedProgress || 0) + (result.deletedWatched || 0)} DB row(s) and ${result.deletedCacheFiles || 0} cache file(s)`, "success");
     await loadLibrary();
   });
 }
@@ -889,21 +977,26 @@ async function loadDownloads() {
 async function loadProgress() {
   const result = await api("/api/progress");
   state.progress = result.progress || [];
+  state.watchedVideoIds = result.watchedVideoIds || [];
 }
 
 async function loadLibrary() {
   state.config = await api("/api/config");
   renderQualityOptions();
-  const [library, downloads, progress, preferences] = await Promise.all([
+  const [library, downloads, progress, preferences, profiles] = await Promise.all([
     api("/api/library"),
     api("/api/downloads"),
     api("/api/progress"),
-    api("/api/preferences")
+    api("/api/preferences"),
+    api("/api/profiles")
   ]);
   state.library = library;
   state.downloads = downloads.downloads || [];
   state.progress = progress.progress || [];
+  state.watchedVideoIds = progress.watchedVideoIds || [];
   state.preferences = preferences;
+  state.profiles = profiles.profiles || [];
+  state.selectedProfile = profiles.selectedProfile || state.profiles[0]?.key || "";
   await loadAdminData();
   renderAddPanel();
   render();
@@ -941,6 +1034,7 @@ document.querySelectorAll("[data-menu-filter]").forEach((button) => {
 menuBackdrop.addEventListener("click", closeMenu);
 menuButton.addEventListener("click", toggleMenu);
 menuCloseButton.addEventListener("click", closeMenu);
+profileButton?.addEventListener("click", () => selectFilter("settings"));
 
 searchInput.addEventListener("input", () => {
   state.query = searchInput.value;

@@ -195,6 +195,35 @@ function publicUser(user) {
   };
 }
 
+function accountProfile(user) {
+  const username = typeof user === "string" ? user : user.username;
+  return {
+    id: username,
+    key: username,
+    username,
+    name: username,
+    type: "account",
+    role: typeof user === "string" ? "viewer" : user.role || "viewer",
+    createdAt: typeof user === "string" ? "" : user.createdAt
+  };
+}
+
+function childProfileKey(ownerUsername, childId) {
+  return `${ownerUsername}:${childId}`;
+}
+
+function childProfileFromRow(row) {
+  return {
+    id: row.id,
+    key: childProfileKey(row.ownerUsername, row.id),
+    username: row.ownerUsername,
+    ownerUsername: row.ownerUsername,
+    name: row.name,
+    type: "child",
+    createdAt: row.createdAt
+  };
+}
+
 function progressUsername(session) {
   return session?.profile || session?.username;
 }
@@ -296,6 +325,12 @@ function initSchema() {
     updated_at TEXT NOT NULL,
     PRIMARY KEY (username, video_id)
   )`);
+  run(`CREATE TABLE IF NOT EXISTS watched_videos (
+    username TEXT NOT NULL,
+    video_id TEXT NOT NULL,
+    watched_at TEXT NOT NULL,
+    PRIMARY KEY (username, video_id)
+  )`);
   run(`CREATE TABLE IF NOT EXISTS tv_tokens (
     token_hash TEXT PRIMARY KEY,
     username TEXT NOT NULL,
@@ -311,6 +346,13 @@ function initSchema() {
     last_used_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
     user_agent TEXT
+  )`);
+  run(`CREATE TABLE IF NOT EXISTS child_profiles (
+    id TEXT PRIMARY KEY,
+    owner_username TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(owner_username, name)
   )`);
 }
 
@@ -376,6 +418,58 @@ function getUser(username) {
   return get("SELECT username, role, password_hash AS passwordHash, created_at AS createdAt, updated_at AS updatedAt FROM users WHERE username = ?", [username]);
 }
 
+function getChildProfiles(ownerUsername) {
+  return all(`SELECT id, owner_username AS ownerUsername, name, created_at AS createdAt
+    FROM child_profiles WHERE owner_username = ? ORDER BY created_at`, [ownerUsername]).map(childProfileFromRow);
+}
+
+function getProfilesForSession(session) {
+  if (!session?.username) return [];
+  return [accountProfile(session), ...getChildProfiles(session.username)];
+}
+
+function findSelectableProfile(session, key) {
+  if (!session?.username) return null;
+  const profileKey = String(key || session.username);
+  return getProfilesForSession(session).find((profile) => profile.key === profileKey || profile.id === profileKey) || null;
+}
+
+function createChildProfile(ownerUsername, name) {
+  const trimmed = String(name || "").trim().slice(0, 36);
+  if (!trimmed) {
+    const error = new Error("Profile name is required");
+    error.statusCode = 400;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  try {
+    run("INSERT INTO child_profiles (id, owner_username, name, created_at) VALUES (?, ?, ?, ?)", [id, ownerUsername, trimmed, now]);
+  } catch {
+    const error = new Error("That profile already exists");
+    error.statusCode = 409;
+    throw error;
+  }
+  return childProfileFromRow({ id, ownerUsername, name: trimmed, createdAt: now });
+}
+
+function deleteChildProfile(ownerUsername, id) {
+  const row = get("SELECT id, owner_username AS ownerUsername FROM child_profiles WHERE owner_username = ? AND id = ?", [ownerUsername, id]);
+  if (!row) return false;
+  const key = childProfileKey(ownerUsername, id);
+  run("DELETE FROM child_profiles WHERE id = ?", [id]);
+  run("DELETE FROM user_preferences WHERE username = ?", [key]);
+  run("DELETE FROM watch_progress WHERE username = ?", [key]);
+  run("DELETE FROM watched_videos WHERE username = ?", [key]);
+  run("UPDATE user_sessions SET profile = NULL WHERE username = ? AND profile = ?", [ownerUsername, key]);
+  for (const [token, remembered] of sessions.entries()) {
+    if (remembered.username === ownerUsername && remembered.profile === key) {
+      sessions.set(token, { username: remembered.username, role: remembered.role || "viewer" });
+    }
+  }
+  return true;
+}
+
 function upsertUser(user) {
   const now = new Date().toISOString();
   run(`INSERT INTO users (username, role, password_hash, created_at, updated_at)
@@ -390,9 +484,17 @@ function upsertUser(user) {
 }
 
 function deleteUser(username) {
+  for (const profile of getChildProfiles(username)) {
+    run("DELETE FROM user_preferences WHERE username = ?", [profile.key]);
+    run("DELETE FROM watch_progress WHERE username = ?", [profile.key]);
+    run("DELETE FROM watched_videos WHERE username = ?", [profile.key]);
+  }
+  run("DELETE FROM child_profiles WHERE owner_username = ?", [username]);
   run("DELETE FROM users WHERE username = ?", [username]);
   run("DELETE FROM tv_tokens WHERE username = ?", [username]);
   run("DELETE FROM user_preferences WHERE username = ?", [username]);
+  run("DELETE FROM watch_progress WHERE username = ?", [username]);
+  run("DELETE FROM watched_videos WHERE username = ?", [username]);
   run("DELETE FROM user_sessions WHERE username = ?", [username]);
 }
 
@@ -571,6 +673,9 @@ function saveWatchProgress(username, videoId, position, duration) {
   const safeDuration = Math.max(0, Number(duration) || 0);
   if (safeDuration && safeDuration - safePosition < 20) {
     run("DELETE FROM watch_progress WHERE username = ? AND video_id = ?", [username, videoId]);
+    run(`INSERT INTO watched_videos (username, video_id, watched_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(username, video_id) DO UPDATE SET watched_at = excluded.watched_at`, [username, videoId, now]);
     return;
   }
 
@@ -585,6 +690,10 @@ function saveWatchProgress(username, videoId, position, duration) {
 function getWatchProgress(username) {
   return all(`SELECT video_id AS videoId, position, duration, updated_at AS updatedAt
     FROM watch_progress WHERE username = ? ORDER BY updated_at DESC LIMIT 24`, [username]);
+}
+
+function getWatchedVideoIds(username) {
+  return all("SELECT video_id AS videoId FROM watched_videos WHERE username = ?", [username]).map((item) => item.videoId);
 }
 
 async function migrateLegacyJson() {
@@ -1163,6 +1272,54 @@ async function clearGeneratedThumbnails() {
   await fs.rm(thumbnailDir(), { recursive: true, force: true });
 }
 
+async function deleteOrphanCacheFiles(folder, validIds) {
+  let deleted = 0;
+  let entries = [];
+  try {
+    entries = await fs.readdir(folder, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const id = entry.name.replace(/\.(json|jpg)$/i, "");
+    if (validIds.has(id)) continue;
+    await fs.rm(path.join(folder, entry.name), { force: true });
+    deleted += 1;
+  }
+  return deleted;
+}
+
+async function cleanDeletedVideoData() {
+  await scanLibrary({ skipAutoMetadata: true });
+  const validIds = new Set(library.videos.map((video) => video.id));
+  const progressRows = all("SELECT username, video_id AS videoId FROM watch_progress");
+  const watchedRows = all("SELECT username, video_id AS videoId FROM watched_videos");
+  let deletedProgress = 0;
+  let deletedWatched = 0;
+  for (const row of progressRows) {
+    if (validIds.has(row.videoId)) continue;
+    run("DELETE FROM watch_progress WHERE username = ? AND video_id = ?", [row.username, row.videoId]);
+    deletedProgress += 1;
+  }
+  for (const row of watchedRows) {
+    if (validIds.has(row.videoId)) continue;
+    run("DELETE FROM watched_videos WHERE username = ? AND video_id = ?", [row.username, row.videoId]);
+    deletedWatched += 1;
+  }
+  const deletedThumbnails = await deleteOrphanCacheFiles(thumbnailDir(), validIds);
+  const deletedMetadata = await deleteOrphanCacheFiles(metadataDir(), validIds);
+  const deletedProbe = await deleteOrphanCacheFiles(probeDir(), validIds);
+  return {
+    deletedProgress,
+    deletedWatched,
+    deletedThumbnails,
+    deletedMetadata,
+    deletedProbe,
+    deletedCacheFiles: deletedThumbnails + deletedMetadata + deletedProbe
+  };
+}
+
 function qualityPayload(quality) {
   if (quality === "audio") return { quality: "audio" };
   if (quality && quality !== "auto" && quality !== "best") return { quality };
@@ -1447,6 +1604,67 @@ async function handleApi(req, res, url) {
     }
   }
 
+  if (url.pathname === "/api/profiles") {
+    if (req.method === "GET") {
+      return sendJson(res, 200, {
+        profiles: getProfilesForSession(session),
+        selectedProfile: progressUsername(session)
+      });
+    }
+
+    if (req.method === "POST") {
+      try {
+        const payload = await readBody(req);
+        createChildProfile(session.username, payload.name);
+        return sendJson(res, 201, {
+          profiles: getProfilesForSession(session),
+          selectedProfile: progressUsername(session)
+        });
+      } catch (error) {
+        return sendJson(res, error.statusCode || 500, { error: error.message });
+      }
+    }
+  }
+
+  if (url.pathname.startsWith("/api/profiles/") && req.method === "DELETE") {
+    const id = safeDecode(url.pathname.slice("/api/profiles/".length));
+    const deletedKey = childProfileKey(session.username, id);
+    if (!deleteChildProfile(session.username, id)) return sendJson(res, 404, { error: "Profile not found" });
+    if (progressUsername(session) === deletedKey) {
+      const token = parseCookies(req).pt_session;
+      const nextSession = { username: session.username, role: session.role || "viewer" };
+      if (token) {
+        sessions.set(token, nextSession);
+        updatePersistentSessionProfile(token, "");
+      }
+    }
+    return sendJson(res, 200, {
+      profiles: getProfilesForSession(session),
+      selectedProfile: progressUsername(session) === deletedKey ? session.username : progressUsername(session)
+    });
+  }
+
+  if (url.pathname === "/api/profile" && req.method === "POST") {
+    const payload = await readBody(req);
+    const selected = findSelectableProfile(session, payload.profileKey || payload.key || payload.username);
+    if (!selected) return sendJson(res, 404, { error: "Profile not found" });
+    const token = parseCookies(req).pt_session;
+    const nextSession = { username: session.username, role: session.role || "viewer", ...(selected.key !== session.username ? { profile: selected.key } : {}) };
+    if (token) {
+      sessions.set(token, nextSession);
+      updatePersistentSessionProfile(token, selected.key === session.username ? "" : selected.key);
+    } else {
+      const newToken = createSession(session.username, req.headers["user-agent"] || "", selected.key === session.username ? "" : selected.key);
+      sessions.set(newToken, nextSession);
+      setSessionCookie(res, newToken);
+    }
+    return sendJson(res, 200, {
+      selectedProfile: selected.key,
+      user: nextSession,
+      preferences: userPreferences(selected.key)
+    });
+  }
+
   if (url.pathname === "/api/settings") {
     if (!requireAdmin(req, res)) return;
 
@@ -1470,7 +1688,8 @@ async function handleApi(req, res, url) {
         ...item,
         video: library.videos.find((video) => video.id === item.videoId) || null
       })).filter((item) => item.video);
-      return sendJson(res, 200, { progress });
+      const watchedVideoIds = getWatchedVideoIds(progressUsername(session)).filter((id) => library.videos.some((video) => video.id === id));
+      return sendJson(res, 200, { progress, watchedVideoIds });
     }
 
     if (req.method === "POST") {
@@ -1482,25 +1701,26 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/tv/profiles" && req.method === "GET") {
     return sendJson(res, 200, {
-      profiles: getUsers().map(publicUser),
+      profiles: getProfilesForSession(session),
       selectedProfile: progressUsername(session)
     });
   }
 
   if (url.pathname === "/api/tv/profile" && req.method === "POST") {
     const payload = await readBody(req);
-    const profile = getUser(payload.username);
+    const profile = findSelectableProfile(session, payload.profileKey || payload.key || payload.username);
     if (!profile) return sendJson(res, 404, { error: "Profile not found" });
     const token = parseCookies(req).pt_session;
+    const nextSession = { username: session.username, role: session.role || "viewer", ...(profile.key !== session.username ? { profile: profile.key } : {}) };
     if (token && sessions.has(token)) {
-      sessions.set(token, { ...sessions.get(token), profile: profile.username });
-      updatePersistentSessionProfile(token, profile.username);
+      sessions.set(token, nextSession);
+      updatePersistentSessionProfile(token, profile.key === session.username ? "" : profile.key);
     } else {
-      const newToken = createSession(session.username, req.headers["user-agent"] || "", profile.username);
-      sessions.set(newToken, { username: session.username, role: session.role || "viewer", profile: profile.username });
+      const newToken = createSession(session.username, req.headers["user-agent"] || "", profile.key === session.username ? "" : profile.key);
+      sessions.set(newToken, nextSession);
       setSessionCookie(res, newToken);
     }
-    return sendJson(res, 200, { selectedProfile: profile.username });
+    return sendJson(res, 200, { selectedProfile: profile.key });
   }
 
   if (url.pathname.startsWith("/api/metadata/") && req.method === "POST") {
@@ -1616,6 +1836,12 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/retention/run" && req.method === "POST") {
     if (!requireAdmin(req, res)) return;
     const result = await applyRetention();
+    return sendJson(res, 200, result);
+  }
+
+  if (url.pathname === "/api/cleanup/deleted" && req.method === "POST") {
+    if (!requireAdmin(req, res)) return;
+    const result = await cleanDeletedVideoData();
     return sendJson(res, 200, result);
   }
 
